@@ -60,7 +60,7 @@ add_definitions(-std=${USE_CPP_VERSION})
 
 # compiler & linker flags
 
-set(USUAL_COMPILE_OPTIONS "-O3 -g")
+set(USUAL_COMPILE_OPTIONS "-g -ggdb -O0")
 
 set(CMAKE_CXX_FLAGS_DEV "${USUAL_COMPILE_OPTIONS}"
   CACHE STRING "Flags used by the compiler during developer builds."
