@@ -124,7 +124,8 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
 
   iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles] (const osmium::Way &way) {
       if (way.visible()) {
-        auto &tiles_for_way = way_tiles[way.id()];
+        TileSet local;
+        auto &tiles_for_way = local[way.id()];
 
         for (const auto &nd : way.nodes()) {
           auto itr = node_tiles.find(nd.ref());
@@ -134,6 +135,27 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
               tiles_for_way.insert(tile);
             }
           }
+        }
+
+        for (const auto &nd : way.nodes()) {
+          TileSet node_local;
+          auto &extra_tiles_for_node = node_local[nd.ref()];
+          auto itr = node_tiles.find(nd.ref());
+
+          for (auto tile : tiles_for_way) {
+            if ((itr == node_tiles.end()) ||
+                (itr->second.count(tile) == 0)) {
+              extra_tiles_for_node.insert(tile);
+            }
+          }
+
+          if (!extra_tiles_for_node.empty()) {
+            extra_node_tiles[nd.ref()].insert(extra_tiles_for_node.begin(), extra_tiles_for_node.end());
+          }
+        }
+
+        if (!tiles_for_way.empty()) {
+          way_tiles[way.id()].insert(tiles_for_way.begin(), tiles_for_way.end());
         }
       }
     });

@@ -95,5 +95,45 @@ TEST_CASE("Split ways") {
     REQUIRE(way_tiles.count(1) == 1);
     REQUIRE(way_tiles[1].size() == 1);
     REQUIRE(way_tiles[1].count(1) == 1);
+    REQUIRE(extra_node_tiles.empty());
+  }
+
+  SECTION("way should cause nodes to be put in extra buckets.") {
+    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    constexpr size_t buffer_size = 10000;
+    unsigned char data[buffer_size];
+
+    map_t node_tiles;
+    node_tiles[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles[2] = std::set<hsplitter::tile_t>({2});
+    node_tiles[3] = std::set<hsplitter::tile_t>({3});
+
+    osmium::memory::Buffer ways(data, buffer_size, 0);
+
+    push_back_way(ways, 1, 1, true, 1, 1, {1, 2, 3});
+
+    REQUIRE(std::distance(ways.begin(), ways.end()) == 1);
+
+    auto it = ways.begin();
+    auto pair = hsplitter::tiles_for_ways<map_t>(it, ways.end(), node_tiles);
+    map_t way_tiles = std::move(pair.first);
+    map_t extra_node_tiles = std::move(pair.second);
+
+    REQUIRE(way_tiles.size() == 1);
+    REQUIRE(way_tiles.count(1) == 1);
+    REQUIRE(way_tiles[1].size() == 3);
+    REQUIRE(way_tiles[1].count(1) == 1);
+    REQUIRE(way_tiles[1].count(2) == 1);
+    REQUIRE(way_tiles[1].count(3) == 1);
+
+    REQUIRE(extra_node_tiles[1].size() == 2);
+    REQUIRE(extra_node_tiles[1].count(2) == 1);
+    REQUIRE(extra_node_tiles[1].count(3) == 1);
+    REQUIRE(extra_node_tiles[2].size() == 2);
+    REQUIRE(extra_node_tiles[2].count(1) == 1);
+    REQUIRE(extra_node_tiles[2].count(3) == 1);
+    REQUIRE(extra_node_tiles[3].size() == 2);
+    REQUIRE(extra_node_tiles[3].count(1) == 1);
+    REQUIRE(extra_node_tiles[3].count(2) == 1);
   }
 }
