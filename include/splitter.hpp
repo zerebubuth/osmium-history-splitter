@@ -36,6 +36,7 @@ DEALINGS IN THE SOFTWARE.
 #include <osmium/geom/coordinates.hpp>
 #include <osmium/geom/mercator_projection.hpp>
 #include <osmium/osm/node.hpp>
+#include <osmium/osm/way.hpp>
 
 namespace hsplitter {
 
@@ -60,6 +61,11 @@ struct osmium_item_type {};
 template <>
 struct osmium_item_type<osmium::Node> {
   static const osmium::item_type type = osmium::item_type::node;
+};
+
+template <>
+struct osmium_item_type<osmium::Way> {
+  static const osmium::item_type type = osmium::item_type::way;
 };
 
 template <typename Item, typename Iterator, typename Func>
@@ -108,6 +114,31 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
     });
 
   return std::move(tiles);
+}
+
+// returns a pair of (way_tiles, extra_node_tiles).
+template <typename TileSet, typename Iterator>
+inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &end,
+                                                  const TileSet &node_tiles) {
+  TileSet way_tiles, extra_node_tiles;
+
+  iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles] (const osmium::Way &way) {
+      if (way.visible()) {
+        auto &tiles_for_way = way_tiles[way.id()];
+
+        for (const auto &nd : way.nodes()) {
+          auto itr = node_tiles.find(nd.ref());
+
+          if (itr != node_tiles.end()) {
+            for (auto tile : itr->second) {
+              tiles_for_way.insert(tile);
+            }
+          }
+        }
+      }
+    });
+
+  return std::make_pair(std::move(way_tiles), std::move(extra_node_tiles));
 }
 
 } // namespace hsplitter
