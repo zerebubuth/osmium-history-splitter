@@ -160,7 +160,24 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
       }
     });
 
-  return std::make_pair(std::move(way_tiles), std::move(extra_node_tiles));
+  return std::move(std::make_pair(std::move(way_tiles), std::move(extra_node_tiles)));
+}
+
+template <typename TileSet, typename Iterator>
+TileSet tiles_for_relations(Iterator &it, const Iterator &end,
+                            const TileSet &node_tiles,
+                            const TileSet &way_tiles,
+                            const TileSet &extra_node_tiles) {
+  TileSet rel_tiles;
+
+  // loop over rels, collecting:
+  //   for node & way members, the tiles in rel_tiles
+  //   for relation members, the member ids in a map<id, set<member_id>>
+  // loop over rel->member map, collecting:
+  //   tiles from rel_tiles in extra_rel_tiles.
+  // return tiles, extra_rel_tiles.
+
+  return std::move(rel_tiles);
 }
 
 } // namespace hsplitter
