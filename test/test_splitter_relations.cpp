@@ -82,7 +82,7 @@ void push_back_rel(osmium::memory::Buffer &rels,
 } // anonymous namespace
 
 TEST_CASE("Split relations") {
-  SECTION("should put relation in the right bucket.") {
+  SECTION("should account for nodes.") {
     using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
@@ -108,5 +108,105 @@ TEST_CASE("Split relations") {
     REQUIRE(rel_tiles[1].size() == 1);
     REQUIRE(rel_tiles[1].count(1) == 1);
     REQUIRE(extra_rel_tiles.empty());
+  }
+
+  SECTION("should account for ways.") {
+    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    constexpr size_t buffer_size = 10000;
+    unsigned char data[buffer_size];
+
+    map_t node_tiles, way_tiles, extra_node_tiles;
+    node_tiles[1] = std::set<hsplitter::tile_t>({2});
+    way_tiles[1] = std::set<hsplitter::tile_t>({2});
+
+    osmium::memory::Buffer rels(data, buffer_size, 0);
+
+    push_back_rel(rels, 1, 1, true, 1, 1, {}, {1}, {});
+
+    REQUIRE(std::distance(rels.begin(), rels.end()) == 1);
+
+    auto it = rels.begin();
+    auto pair = hsplitter::tiles_for_relations<map_t>(it, rels.end(), node_tiles, way_tiles, extra_node_tiles);
+    map_t rel_tiles = std::move(pair.first);
+    map_t extra_rel_tiles = std::move(pair.second);
+
+    REQUIRE(rel_tiles.size() == 1);
+    REQUIRE(rel_tiles.count(1) == 1);
+    REQUIRE(rel_tiles[1].size() == 1);
+    REQUIRE(rel_tiles[1].count(2) == 1);
+    REQUIRE(extra_rel_tiles.empty());
+  }
+
+  SECTION("should account for extra nodes.") {
+    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    constexpr size_t buffer_size = 10000;
+    unsigned char data[buffer_size];
+
+    map_t node_tiles, way_tiles, extra_node_tiles;
+    node_tiles[1] = std::set<hsplitter::tile_t>({1});
+    way_tiles[1] = std::set<hsplitter::tile_t>({1,2});
+    extra_node_tiles[1] = std::set<hsplitter::tile_t>({2});
+
+    osmium::memory::Buffer rels(data, buffer_size, 0);
+
+    // the node is included not because it's in a tile, but because
+    // it's included via a way. this can mean the relation which
+    // includes it gets pulled into the tile as well.
+    push_back_rel(rels, 1, 1, true, 1, 1, {1}, {}, {});
+
+    REQUIRE(std::distance(rels.begin(), rels.end()) == 1);
+
+    auto it = rels.begin();
+    auto pair = hsplitter::tiles_for_relations<map_t>(it, rels.end(), node_tiles, way_tiles, extra_node_tiles);
+    map_t rel_tiles = std::move(pair.first);
+    map_t extra_rel_tiles = std::move(pair.second);
+
+    REQUIRE(rel_tiles.size() == 1);
+    REQUIRE(rel_tiles.count(1) == 1);
+    REQUIRE(rel_tiles[1].size() == 2);
+    REQUIRE(rel_tiles[1].count(1) == 1);
+    REQUIRE(rel_tiles[1].count(2) == 1);
+    REQUIRE(extra_rel_tiles.empty());
+  }
+
+  SECTION("should output extra relation tiles for relations-of-relations.") {
+    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    constexpr size_t buffer_size = 10000;
+    unsigned char data[buffer_size];
+
+    map_t node_tiles, way_tiles, extra_node_tiles;
+    node_tiles[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles[2] = std::set<hsplitter::tile_t>({2});
+
+    osmium::memory::Buffer rels(data, buffer_size, 0);
+
+    // relation 2 uses relation 1, so relation 2 needs to be
+    // included in any tiles that relation 1 is included in,
+    // in addition to its own.
+    push_back_rel(rels, 1, 1, true, 1, 1, {1}, {}, {});
+    push_back_rel(rels, 2, 1, true, 1, 1, {2}, {}, {1});
+
+    REQUIRE(std::distance(rels.begin(), rels.end()) == 2);
+
+    auto it = rels.begin();
+    auto pair = hsplitter::tiles_for_relations<map_t>(it, rels.end(), node_tiles, way_tiles, extra_node_tiles);
+    map_t rel_tiles = std::move(pair.first);
+    map_t extra_rel_tiles = std::move(pair.second);
+
+    REQUIRE(rel_tiles.size() == 2);
+    // relation 1 is in tile 1 because it includes node 1 directly
+    REQUIRE(rel_tiles.count(1) == 1);
+    REQUIRE(rel_tiles[1].size() == 1);
+    REQUIRE(rel_tiles[1].count(1) == 1);
+    // relation 2 is in tile 2 because it includes node 2 directly
+    REQUIRE(rel_tiles.count(2) == 1);
+    REQUIRE(rel_tiles[2].size() == 1);
+    REQUIRE(rel_tiles[2].count(2) == 1);
+    // relation 2 is _also_ in tile 1 because it includes relation
+    // 1 directly.
+    REQUIRE(extra_rel_tiles.size() == 1);
+    REQUIRE(extra_rel_tiles.count(2) == 1);
+    REQUIRE(extra_rel_tiles[2].size() == 1);
+    REQUIRE(extra_rel_tiles[2].count(1) == 1);
   }
 }
