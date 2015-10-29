@@ -37,6 +37,10 @@ DEALINGS IN THE SOFTWARE.
 #include <osmium/geom/mercator_projection.hpp>
 #include <osmium/osm/node.hpp>
 #include <osmium/osm/way.hpp>
+#include <osmium/osm/relation.hpp>
+
+#include <unordered_map>
+#include <unordered_set>
 
 namespace hsplitter {
 
@@ -66,6 +70,11 @@ struct osmium_item_type<osmium::Node> {
 template <>
 struct osmium_item_type<osmium::Way> {
   static const osmium::item_type type = osmium::item_type::way;
+};
+
+template <>
+struct osmium_item_type<osmium::Relation> {
+  static const osmium::item_type type = osmium::item_type::relation;
 };
 
 template <typename Item, typename Iterator, typename Func>
@@ -106,7 +115,7 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
           double y = double(1 << 16) * 0.5 * (max_coord - coords.y) / max_coord;
           if (y <     0.0) { y =     0.0; }
           if (y > 65535.0) { y = 65535.0; }
-          
+
           auto tile_id = morton_code(uint16_t(x), uint16_t(y));
           tiles[node.id()].insert(tile_id);
         }
@@ -163,21 +172,61 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
   return std::move(std::make_pair(std::move(way_tiles), std::move(extra_node_tiles)));
 }
 
+namespace detail {
+template <typename TileSet>
+inline void add_tiles_for_id(const TileSet &from,
+                             typename TileSet::key_type id,
+                             typename TileSet::mapped_type &to) {
+  auto itr = from.find(id);
+
+  if (itr != from.end()) {
+    to.insert(itr->second.begin(), itr->second.end());
+  }
+}
+} // namespace detail
+
 template <typename TileSet, typename Iterator>
-TileSet tiles_for_relations(Iterator &it, const Iterator &end,
-                            const TileSet &node_tiles,
-                            const TileSet &way_tiles,
-                            const TileSet &extra_node_tiles) {
-  TileSet rel_tiles;
+std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &end,
+                                                const TileSet &node_tiles,
+                                                const TileSet &way_tiles,
+                                                const TileSet &extra_node_tiles) {
+  using detail::add_tiles_for_id;
+  TileSet rel_tiles, extra_rel_tiles;
+  std::unordered_map<osmium::object_id_type, std::unordered_set<osmium::object_id_type> > rel_members;
 
-  // loop over rels, collecting:
-  //   for node & way members, the tiles in rel_tiles
-  //   for relation members, the member ids in a map<id, set<member_id>>
-  // loop over rel->member map, collecting:
-  //   tiles from rel_tiles in extra_rel_tiles.
-  // return tiles, extra_rel_tiles.
+  iterate<osmium::Relation>(it, end, [&node_tiles, &way_tiles, &extra_node_tiles, &rel_tiles, &rel_members] (const osmium::Relation &rel) {
+      if (rel.visible()) {
+        TileSet local;
+        auto &tiles_for_rel = local[rel.id()];
 
-  return std::move(rel_tiles);
+        for (const auto &member : rel.members()) {
+          if (member.type() == osmium::item_type::node) {
+            add_tiles_for_id(node_tiles, member.ref(), tiles_for_rel);
+            add_tiles_for_id(extra_node_tiles, member.ref(), tiles_for_rel);
+
+          } else if (member.type() == osmium::item_type::way) {
+            add_tiles_for_id(way_tiles, member.ref(), tiles_for_rel);
+
+          } else {
+            rel_members[rel.id()].insert(member.ref());
+          }
+        }
+
+        if (!tiles_for_rel.empty()) {
+          rel_tiles[rel.id()].insert(tiles_for_rel.begin(), tiles_for_rel.end());
+        }
+      }
+    });
+
+  for (const auto &rel_member : rel_members) {
+    auto &extra_local = extra_rel_tiles[rel_member.first];
+
+    for (auto member_id : rel_member.second) {
+      add_tiles_for_id(rel_tiles, member_id, extra_local);
+    }
+  }
+
+  return std::move(std::make_pair(std::move(rel_tiles), std::move(extra_rel_tiles)));
 }
 
 } // namespace hsplitter
