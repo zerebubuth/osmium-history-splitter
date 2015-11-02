@@ -61,7 +61,7 @@ struct tileset {
   tileset &operator=(tileset &&t) { m_map = std::move(t.m_map); return *this; }
   tileset &operator=(const tileset &) = delete;
 
-  inline void insert(key_type k, hsplitter::tile_t v) {
+  inline void insert(key_type k, mapped_type v) {
     m_map[k].insert(v);
   }
 
