@@ -7,6 +7,7 @@
 #include <iostream>
 #include <map>
 #include <set>
+#include <cassert>
 
 
 namespace {
@@ -38,33 +39,126 @@ struct tile_grid {
   tile_file m_file;
 };
 
-// struct tile_map_subarray {
-//   ??? &operator[](uint32_t k) {
-//   }
-// };
+struct pair_snd_iterator {
+  typedef std::vector<std::pair<uint32_t, uint32_t> >::const_iterator const_iterator;
+  explicit pair_snd_iterator(const_iterator i) : m_itr(i) {}
+  pair_snd_iterator(const pair_snd_iterator &other) : m_itr(other.m_itr) {}
 
-// struct tile_map_array {
-//   typedef key_type int64_t;
-//   typedef mapped_type ???;
+  typedef const uint32_t &reference;
 
-//   mapped_type &operator[](key_type k) {
-//     ASSERT(k >= 0);
-//     uint32_t idx = k >> 32;
-//     uint32_t prt = k & ((uint64_t(1) << 32) - 1);
-//     if (idx >= m_array.size()) {
-//       m_array.resize(idx + 1);
-//     }
-//     tile_map_subarray &sub = m_array[idx];
-//     return sub[prt];
-//   }
+  inline reference operator*() { return m_itr->second; }
+  inline pair_snd_iterator &operator++() { ++m_itr; return *this; }
+  inline pair_snd_iterator operator++(int) { pair_snd_iterator rv = *this; ++(*this); return rv; }
 
-//   std::vector<tile_map_subarray> m_array;
-// };
+  inline bool operator==(const pair_snd_iterator &other) const { return m_itr == other.m_itr; }
+  inline bool operator!=(const pair_snd_iterator &other) const { return m_itr != other.m_itr; }
+
+private:
+  const_iterator m_itr;
+};
+
+template <typename Iterator>
+struct iter_pair_range {
+  typedef std::pair<Iterator, Iterator> value_type;
+  value_type m_pair;
+
+  explicit iter_pair_range(value_type v) : m_pair(v) {}
+
+  Iterator begin() const { return m_pair.first; }
+  Iterator end()   const { return m_pair.second; }
+};
+
+struct tile_map_subarray {
+  typedef uint32_t key_type;
+  typedef uint32_t mapped_type;
+  typedef pair_snd_iterator const_iterator;
+  typedef std::vector<std::pair<uint32_t, uint32_t> > cont_t;
+
+  tile_map_subarray() {}
+  tile_map_subarray(tile_map_subarray &&t)
+    : m_is_sorted(true), m_last_key(0), m_array(std::move(t.m_array)) {
+  }
+  tile_map_subarray(const tile_map_subarray &) = delete;
+
+  tile_map_subarray &operator=(tile_map_subarray &&t) {
+    m_is_sorted = t.m_is_sorted;
+    m_last_key = t.m_last_key;
+    m_array = std::move(t.m_array);
+    return *this;
+  }
+  tile_map_subarray &operator=(const tile_map_subarray &) = delete;
+
+  void insert(key_type k, mapped_type v) {
+    if (m_is_sorted && m_last_key > k) { m_is_sorted = false; }
+    auto p = std::make_pair(k, v);
+    if (m_array.empty() || p != m_array.back()) {
+      m_array.push_back(p);
+      m_last_key = k;
+    }
+  }
+
+  iter_pair_range<const_iterator> equal_range(key_type k) const {
+    if (!m_is_sorted) {
+      std::sort(m_array.begin(), m_array.end());
+      auto itr = std::unique(m_array.begin(), m_array.end());
+      m_array.erase(itr, m_array.end());
+      m_is_sorted = true;
+      m_last_key = m_array.empty() ? 0 : m_array.back().first;
+    }
+    const auto &lb = std::lower_bound(m_array.begin(), m_array.end(), std::make_pair(k, mapped_type(0)));
+    const auto &ub = std::upper_bound(lb, m_array.end(), std::make_pair(k, std::numeric_limits<mapped_type>::max()));
+    return iter_pair_range<const_iterator>(std::make_pair(const_iterator(lb), const_iterator(ub)));
+  }
+
+  mutable bool m_is_sorted;
+  mutable uint64_t m_last_key;
+  mutable cont_t m_array;
+};
+
+struct tile_map_array {
+  typedef int64_t key_type;
+  typedef uint32_t mapped_type;
+  typedef pair_snd_iterator const_iterator;
+
+  tile_map_array() {}
+  tile_map_array(tile_map_array &&t) : m_array(std::move(t.m_array)) {}
+  tile_map_array(const tile_map_array &) = delete;
+
+  tile_map_array &operator=(tile_map_array &&t) { m_array = std::move(t.m_array); return *this; }
+  tile_map_array &operator=(const tile_map_array &) = delete;
+
+  void insert(key_type k, mapped_type v) {
+    assert(k >= 0);
+    uint32_t idx = k >> 32;
+    uint32_t prt = k & ((uint64_t(1) << 32) - 1);
+    if (idx >= m_array.size()) {
+      m_array.resize(idx + 1);
+    }
+    tile_map_subarray &sub = m_array[idx];
+    sub.insert(k, v);
+  }
+
+  iter_pair_range<const_iterator> equal_range(key_type k) const {
+    assert(k >= 0);
+    uint32_t idx = k >> 32;
+    uint32_t prt = k & ((uint64_t(1) << 32) - 1);
+    if (idx >= m_array.size()) {
+      iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(m_empty.end()), pair_snd_iterator(m_empty.end())));
+
+    } else {
+      const tile_map_subarray &sub = m_array[idx];
+      return sub.equal_range(prt);
+    }
+  }
+
+  std::vector<tile_map_subarray> m_array;
+  static const tile_map_subarray::cont_t m_empty;
+};
 
 } // anonymous namespace
 
 int main(int argc, char *argv[]) {
-  using tileset_t = tileset;
+  using tileset_t = tile_map_array;
 
   if (argc != 2) {
     std::cerr << "Usage: " << argv[0] << " INFILE\n";
