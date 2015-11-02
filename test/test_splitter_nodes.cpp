@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include "catch.hpp"
 #include "splitter.hpp"
+#include "tileset.hpp"
 
 #include <osmium/memory/buffer.hpp>
 #include <osmium/builder/osm_object_builder.hpp>
@@ -42,7 +43,7 @@ DEALINGS IN THE SOFTWARE.
 
 TEST_CASE("Split nodes") {
   SECTION("should put node in the right bucket.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
@@ -68,14 +69,14 @@ TEST_CASE("Split nodes") {
     auto it = nodes.begin();
     auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
 
-    REQUIRE(tiles.size() == 1);
-    REQUIRE(tiles.count(1) == 1);
-    REQUIRE(tiles[1].size() == 1);
-    REQUIRE(tiles[1].count(0) == 1);
+    REQUIRE(tiles.m_map.size() == 1);
+    REQUIRE(tiles.m_map.count(1) == 1);
+    REQUIRE(tiles.m_map[1].size() == 1);
+    REQUIRE(tiles.m_map[1].count(0) == 1);
   }
 
   SECTION("Should put multiple locations for node versions in set") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
@@ -116,15 +117,15 @@ TEST_CASE("Split nodes") {
     auto it = nodes.begin();
     auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
 
-    REQUIRE(tiles.size() == 1);
-    REQUIRE(tiles.count(1) == 1);
-    REQUIRE(tiles[1].size() == 2);
-    REQUIRE(tiles[1].count(0) == 1);
-    REQUIRE(tiles[1].count(0xfffffffful) == 1);
+    REQUIRE(tiles.m_map.size() == 1);
+    REQUIRE(tiles.m_map.count(1) == 1);
+    REQUIRE(tiles.m_map[1].size() == 2);
+    REQUIRE(tiles.m_map[1].count(0) == 1);
+    REQUIRE(tiles.m_map[1].count(0xfffffffful) == 1);
   }
 
   SECTION("Should put multiple nodes in different sets") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
@@ -165,12 +166,12 @@ TEST_CASE("Split nodes") {
     auto it = nodes.begin();
     auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
 
-    REQUIRE(tiles.size() == 2);
-    REQUIRE(tiles.count(1) == 1);
-    REQUIRE(tiles[1].size() == 1);
-    REQUIRE(tiles[1].count(0) == 1);
-    REQUIRE(tiles.count(2) == 1);
-    REQUIRE(tiles[2].size() == 1);
-    REQUIRE(tiles[2].count(0xfffffffful) == 1);
+    REQUIRE(tiles.m_map.size() == 2);
+    REQUIRE(tiles.m_map.count(1) == 1);
+    REQUIRE(tiles.m_map[1].size() == 1);
+    REQUIRE(tiles.m_map[1].count(0) == 1);
+    REQUIRE(tiles.m_map.count(2) == 1);
+    REQUIRE(tiles.m_map[2].size() == 1);
+    REQUIRE(tiles.m_map[2].count(0xfffffffful) == 1);
   }
 }

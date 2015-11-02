@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include "catch.hpp"
 #include "splitter.hpp"
+#include "tileset.hpp"
 
 #include <osmium/memory/buffer.hpp>
 #include <osmium/builder/osm_object_builder.hpp>
@@ -64,21 +65,21 @@ void push_back_way(osmium::memory::Buffer &ways,
       wnl_builder.add_node_ref(nd_id);
     }
   }
-  
+
   ways.commit();
 }
 } // anonymous namespace
 
 TEST_CASE("Split ways") {
   SECTION("should put way in the right bucket.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({1});
-    node_tiles[2] = std::set<hsplitter::tile_t>({1});
-    node_tiles[3] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[2] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[3] = std::set<hsplitter::tile_t>({1});
 
     osmium::memory::Buffer ways(data, buffer_size, 0);
 
@@ -91,22 +92,32 @@ TEST_CASE("Split ways") {
     map_t way_tiles = std::move(pair.first);
     map_t extra_node_tiles = std::move(pair.second);
 
-    REQUIRE(way_tiles.size() == 1);
-    REQUIRE(way_tiles.count(1) == 1);
-    REQUIRE(way_tiles[1].size() == 1);
-    REQUIRE(way_tiles[1].count(1) == 1);
-    REQUIRE(extra_node_tiles.empty());
+    REQUIRE(way_tiles.m_map.size() == 1);
+    REQUIRE(way_tiles.m_map.count(1) == 1);
+    REQUIRE(way_tiles.m_map[1].size() == 1);
+    REQUIRE(way_tiles.m_map[1].count(1) == 1);
+
+    REQUIRE(extra_node_tiles.m_map.size() == 3);
+    REQUIRE(extra_node_tiles.m_map.count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map[1].size() == 1);
+    REQUIRE(extra_node_tiles.m_map[1].count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map.count(2) == 1);
+    REQUIRE(extra_node_tiles.m_map[2].size() == 1);
+    REQUIRE(extra_node_tiles.m_map[2].count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map.count(3) == 1);
+    REQUIRE(extra_node_tiles.m_map[3].size() == 1);
+    REQUIRE(extra_node_tiles.m_map[3].count(1) == 1);
   }
 
   SECTION("way should cause nodes to be put in extra buckets.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({1});
-    node_tiles[2] = std::set<hsplitter::tile_t>({2});
-    node_tiles[3] = std::set<hsplitter::tile_t>({3});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[2] = std::set<hsplitter::tile_t>({2});
+    node_tiles.m_map[3] = std::set<hsplitter::tile_t>({3});
 
     osmium::memory::Buffer ways(data, buffer_size, 0);
 
@@ -119,21 +130,24 @@ TEST_CASE("Split ways") {
     map_t way_tiles = std::move(pair.first);
     map_t extra_node_tiles = std::move(pair.second);
 
-    REQUIRE(way_tiles.size() == 1);
-    REQUIRE(way_tiles.count(1) == 1);
-    REQUIRE(way_tiles[1].size() == 3);
-    REQUIRE(way_tiles[1].count(1) == 1);
-    REQUIRE(way_tiles[1].count(2) == 1);
-    REQUIRE(way_tiles[1].count(3) == 1);
+    REQUIRE(way_tiles.m_map.size() == 1);
+    REQUIRE(way_tiles.m_map.count(1) == 1);
+    REQUIRE(way_tiles.m_map[1].size() == 3);
+    REQUIRE(way_tiles.m_map[1].count(1) == 1);
+    REQUIRE(way_tiles.m_map[1].count(2) == 1);
+    REQUIRE(way_tiles.m_map[1].count(3) == 1);
 
-    REQUIRE(extra_node_tiles[1].size() == 2);
-    REQUIRE(extra_node_tiles[1].count(2) == 1);
-    REQUIRE(extra_node_tiles[1].count(3) == 1);
-    REQUIRE(extra_node_tiles[2].size() == 2);
-    REQUIRE(extra_node_tiles[2].count(1) == 1);
-    REQUIRE(extra_node_tiles[2].count(3) == 1);
-    REQUIRE(extra_node_tiles[3].size() == 2);
-    REQUIRE(extra_node_tiles[3].count(1) == 1);
-    REQUIRE(extra_node_tiles[3].count(2) == 1);
+    REQUIRE(extra_node_tiles.m_map[1].size() == 3);
+    REQUIRE(extra_node_tiles.m_map[1].count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map[1].count(2) == 1);
+    REQUIRE(extra_node_tiles.m_map[1].count(3) == 1);
+    REQUIRE(extra_node_tiles.m_map[2].size() == 3);
+    REQUIRE(extra_node_tiles.m_map[2].count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map[2].count(2) == 1);
+    REQUIRE(extra_node_tiles.m_map[2].count(3) == 1);
+    REQUIRE(extra_node_tiles.m_map[3].size() == 3);
+    REQUIRE(extra_node_tiles.m_map[3].count(1) == 1);
+    REQUIRE(extra_node_tiles.m_map[3].count(2) == 1);
+    REQUIRE(extra_node_tiles.m_map[3].count(3) == 1);
   }
 }

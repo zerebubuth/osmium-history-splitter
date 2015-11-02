@@ -117,7 +117,7 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
           if (y > 65535.0) { y = 65535.0; }
 
           auto tile_id = morton_code(uint16_t(x), uint16_t(y));
-          tiles[node.id()].insert(tile_id);
+          tiles.insert(node.id(), tile_id);
         }
       }
     });
@@ -133,38 +133,23 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
 
   iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles] (const osmium::Way &way) {
       if (way.visible()) {
-        TileSet local;
-        auto &tiles_for_way = local[way.id()];
+        const auto way_id = way.id();
 
         for (const auto &nd : way.nodes()) {
-          auto itr = node_tiles.find(nd.ref());
+          auto range = node_tiles.equal_range(nd.ref());
 
-          if (itr != node_tiles.end()) {
-            for (auto tile : itr->second) {
-              tiles_for_way.insert(tile);
-            }
+          for (auto tile : range) {
+            way_tiles.insert(way_id, tile);
           }
         }
 
+        auto range = way_tiles.equal_range(way_id);
         for (const auto &nd : way.nodes()) {
-          TileSet node_local;
-          auto &extra_tiles_for_node = node_local[nd.ref()];
-          auto itr = node_tiles.find(nd.ref());
+          const auto node_id = nd.ref();
 
-          for (auto tile : tiles_for_way) {
-            if ((itr == node_tiles.end()) ||
-                (itr->second.count(tile) == 0)) {
-              extra_tiles_for_node.insert(tile);
-            }
+          for (auto tile : range) {
+            extra_node_tiles.insert(node_id, tile);
           }
-
-          if (!extra_tiles_for_node.empty()) {
-            extra_node_tiles[nd.ref()].insert(extra_tiles_for_node.begin(), extra_tiles_for_node.end());
-          }
-        }
-
-        if (!tiles_for_way.empty()) {
-          way_tiles[way.id()].insert(tiles_for_way.begin(), tiles_for_way.end());
         }
       }
     });
@@ -175,12 +160,13 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
 namespace detail {
 template <typename TileSet>
 inline void add_tiles_for_id(const TileSet &from,
-                             typename TileSet::key_type id,
-                             typename TileSet::mapped_type &to) {
-  auto itr = from.find(id);
+                             typename TileSet::key_type from_id,
+                             TileSet &to,
+                             typename TileSet::key_type to_id) {
+  auto range = from.equal_range(from_id);
 
-  if (itr != from.end()) {
-    to.insert(itr->second.begin(), itr->second.end());
+  for (auto tile : range) {
+    to.insert(to_id, tile);
   }
 }
 } // namespace detail
@@ -196,33 +182,28 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
 
   iterate<osmium::Relation>(it, end, [&node_tiles, &way_tiles, &extra_node_tiles, &rel_tiles, &rel_members] (const osmium::Relation &rel) {
       if (rel.visible()) {
-        TileSet local;
-        auto &tiles_for_rel = local[rel.id()];
+        const auto rel_id = rel.id();
 
         for (const auto &member : rel.members()) {
+          const auto member_ref = member.ref();
+
           if (member.type() == osmium::item_type::node) {
-            add_tiles_for_id(node_tiles, member.ref(), tiles_for_rel);
-            add_tiles_for_id(extra_node_tiles, member.ref(), tiles_for_rel);
+            add_tiles_for_id(node_tiles, member_ref, rel_tiles, rel_id);
+            add_tiles_for_id(extra_node_tiles, member_ref, rel_tiles, rel_id);
 
           } else if (member.type() == osmium::item_type::way) {
-            add_tiles_for_id(way_tiles, member.ref(), tiles_for_rel);
+            add_tiles_for_id(way_tiles, member_ref, rel_tiles, rel_id);
 
           } else {
-            rel_members[rel.id()].insert(member.ref());
+            rel_members[rel_id].insert(member_ref);
           }
-        }
-
-        if (!tiles_for_rel.empty()) {
-          rel_tiles[rel.id()].insert(tiles_for_rel.begin(), tiles_for_rel.end());
         }
       }
     });
 
   for (const auto &rel_member : rel_members) {
-    auto &extra_local = extra_rel_tiles[rel_member.first];
-
     for (auto member_id : rel_member.second) {
-      add_tiles_for_id(rel_tiles, member_id, extra_local);
+      add_tiles_for_id(rel_tiles, member_id, extra_rel_tiles, rel_member.first);
     }
   }
 

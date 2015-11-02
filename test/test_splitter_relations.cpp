@@ -32,6 +32,7 @@ DEALINGS IN THE SOFTWARE.
 
 #include "catch.hpp"
 #include "splitter.hpp"
+#include "tileset.hpp"
 
 #include <osmium/memory/buffer.hpp>
 #include <osmium/builder/osm_object_builder.hpp>
@@ -83,14 +84,14 @@ void push_back_rel(osmium::memory::Buffer &rels,
 
 TEST_CASE("Split relations") {
   SECTION("should account for nodes.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles, way_tiles, extra_node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({1});
-    node_tiles[2] = std::set<hsplitter::tile_t>({1});
-    node_tiles[3] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[2] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[3] = std::set<hsplitter::tile_t>({1});
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -103,21 +104,21 @@ TEST_CASE("Split relations") {
     map_t rel_tiles = std::move(pair.first);
     map_t extra_rel_tiles = std::move(pair.second);
 
-    REQUIRE(rel_tiles.size() == 1);
-    REQUIRE(rel_tiles.count(1) == 1);
-    REQUIRE(rel_tiles[1].size() == 1);
-    REQUIRE(rel_tiles[1].count(1) == 1);
-    REQUIRE(extra_rel_tiles.empty());
+    REQUIRE(rel_tiles.m_map.size() == 1);
+    REQUIRE(rel_tiles.m_map.count(1) == 1);
+    REQUIRE(rel_tiles.m_map[1].size() == 1);
+    REQUIRE(rel_tiles.m_map[1].count(1) == 1);
+    REQUIRE(extra_rel_tiles.m_map.empty());
   }
 
   SECTION("should account for ways.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles, way_tiles, extra_node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({2});
-    way_tiles[1] = std::set<hsplitter::tile_t>({2});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
+    way_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -130,22 +131,22 @@ TEST_CASE("Split relations") {
     map_t rel_tiles = std::move(pair.first);
     map_t extra_rel_tiles = std::move(pair.second);
 
-    REQUIRE(rel_tiles.size() == 1);
-    REQUIRE(rel_tiles.count(1) == 1);
-    REQUIRE(rel_tiles[1].size() == 1);
-    REQUIRE(rel_tiles[1].count(2) == 1);
-    REQUIRE(extra_rel_tiles.empty());
+    REQUIRE(rel_tiles.m_map.size() == 1);
+    REQUIRE(rel_tiles.m_map.count(1) == 1);
+    REQUIRE(rel_tiles.m_map[1].size() == 1);
+    REQUIRE(rel_tiles.m_map[1].count(2) == 1);
+    REQUIRE(extra_rel_tiles.m_map.empty());
   }
 
   SECTION("should account for extra nodes.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles, way_tiles, extra_node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({1});
-    way_tiles[1] = std::set<hsplitter::tile_t>({1,2});
-    extra_node_tiles[1] = std::set<hsplitter::tile_t>({2});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
+    way_tiles.m_map[1] = std::set<hsplitter::tile_t>({1,2});
+    extra_node_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -161,22 +162,22 @@ TEST_CASE("Split relations") {
     map_t rel_tiles = std::move(pair.first);
     map_t extra_rel_tiles = std::move(pair.second);
 
-    REQUIRE(rel_tiles.size() == 1);
-    REQUIRE(rel_tiles.count(1) == 1);
-    REQUIRE(rel_tiles[1].size() == 2);
-    REQUIRE(rel_tiles[1].count(1) == 1);
-    REQUIRE(rel_tiles[1].count(2) == 1);
-    REQUIRE(extra_rel_tiles.empty());
+    REQUIRE(rel_tiles.m_map.size() == 1);
+    REQUIRE(rel_tiles.m_map.count(1) == 1);
+    REQUIRE(rel_tiles.m_map[1].size() == 2);
+    REQUIRE(rel_tiles.m_map[1].count(1) == 1);
+    REQUIRE(rel_tiles.m_map[1].count(2) == 1);
+    REQUIRE(extra_rel_tiles.m_map.empty());
   }
 
   SECTION("should output extra relation tiles for relations-of-relations.") {
-    using map_t = std::map<hsplitter::tile_t, std::set<hsplitter::tile_t> >;
+    using map_t = tileset;
     constexpr size_t buffer_size = 10000;
     unsigned char data[buffer_size];
 
     map_t node_tiles, way_tiles, extra_node_tiles;
-    node_tiles[1] = std::set<hsplitter::tile_t>({1});
-    node_tiles[2] = std::set<hsplitter::tile_t>({2});
+    node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
+    node_tiles.m_map[2] = std::set<hsplitter::tile_t>({2});
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -193,20 +194,20 @@ TEST_CASE("Split relations") {
     map_t rel_tiles = std::move(pair.first);
     map_t extra_rel_tiles = std::move(pair.second);
 
-    REQUIRE(rel_tiles.size() == 2);
+    REQUIRE(rel_tiles.m_map.size() == 2);
     // relation 1 is in tile 1 because it includes node 1 directly
-    REQUIRE(rel_tiles.count(1) == 1);
-    REQUIRE(rel_tiles[1].size() == 1);
-    REQUIRE(rel_tiles[1].count(1) == 1);
+    REQUIRE(rel_tiles.m_map.count(1) == 1);
+    REQUIRE(rel_tiles.m_map[1].size() == 1);
+    REQUIRE(rel_tiles.m_map[1].count(1) == 1);
     // relation 2 is in tile 2 because it includes node 2 directly
-    REQUIRE(rel_tiles.count(2) == 1);
-    REQUIRE(rel_tiles[2].size() == 1);
-    REQUIRE(rel_tiles[2].count(2) == 1);
+    REQUIRE(rel_tiles.m_map.count(2) == 1);
+    REQUIRE(rel_tiles.m_map[2].size() == 1);
+    REQUIRE(rel_tiles.m_map[2].count(2) == 1);
     // relation 2 is _also_ in tile 1 because it includes relation
     // 1 directly.
-    REQUIRE(extra_rel_tiles.size() == 1);
-    REQUIRE(extra_rel_tiles.count(2) == 1);
-    REQUIRE(extra_rel_tiles[2].size() == 1);
-    REQUIRE(extra_rel_tiles[2].count(1) == 1);
+    REQUIRE(extra_rel_tiles.m_map.size() == 1);
+    REQUIRE(extra_rel_tiles.m_map.count(2) == 1);
+    REQUIRE(extra_rel_tiles.m_map[2].size() == 1);
+    REQUIRE(extra_rel_tiles.m_map[2].count(1) == 1);
   }
 }
