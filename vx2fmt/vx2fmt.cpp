@@ -158,7 +158,7 @@ bool read_string(std::istream &in, std::string &s) {
   return read_string_prefix<0>(in, s, dummy);
 }
 
-bool write_vx2fmt_header(std::ostream &out, const dict_t &headers) {
+bool write_header(std::ostream &out, const dict_t &headers) {
   bool ok = true;
 
   out.write(header_magic.data(), header_magic.size());
@@ -175,7 +175,7 @@ bool write_vx2fmt_header(std::ostream &out, const dict_t &headers) {
   return ok;
 }
 
-bool read_vx2fmt_header(std::istream &in, dict_t &headers) {
+bool read_header(std::istream &in, dict_t &headers) {
   bool ok = true;
   int flag = 0;
   std::string key, val;

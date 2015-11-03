@@ -40,7 +40,7 @@ TEST_CASE("VX2 Format") {
     std::ostringstream out;
     vx2fmt::dict_t headers;
 
-    REQUIRE(vx2fmt::write_vx2fmt_header(out, headers) == true);
+    REQUIRE(vx2fmt::write_header(out, headers) == true);
 
     auto output = out.str();
     REQUIRE(output.size() >= 6);
@@ -56,10 +56,10 @@ TEST_CASE("VX2 Format") {
     std::stringstream stream;
     vx2fmt::dict_t headers;
 
-    REQUIRE(vx2fmt::write_vx2fmt_header(stream, headers) == true);
+    REQUIRE(vx2fmt::write_header(stream, headers) == true);
 
     stream.seekg(0);
-    REQUIRE(vx2fmt::read_vx2fmt_header(stream, headers) == true);
+    REQUIRE(vx2fmt::read_header(stream, headers) == true);
     REQUIRE(headers.empty());
   }
 
@@ -69,10 +69,10 @@ TEST_CASE("VX2 Format") {
     out_headers.insert(std::make_pair<std::string>("foo", "bar"));
     out_headers.insert(std::make_pair<std::string>("baz", "bat"));
     
-    REQUIRE(vx2fmt::write_vx2fmt_header(stream, out_headers) == true);
+    REQUIRE(vx2fmt::write_header(stream, out_headers) == true);
 
     stream.seekg(0);
-    REQUIRE(vx2fmt::read_vx2fmt_header(stream, in_headers) == true);
+    REQUIRE(vx2fmt::read_header(stream, in_headers) == true);
 
     REQUIRE(in_headers.size() == out_headers.size());
     for (const auto &val : out_headers) {
@@ -87,10 +87,10 @@ TEST_CASE("VX2 Format") {
     out_headers.insert(std::make_pair<std::string>("foo", ""));
     out_headers.insert(std::make_pair<std::string>("", "bat"));
     
-    REQUIRE(vx2fmt::write_vx2fmt_header(stream, out_headers) == true);
+    REQUIRE(vx2fmt::write_header(stream, out_headers) == true);
 
     stream.seekg(0);
-    REQUIRE(vx2fmt::read_vx2fmt_header(stream, in_headers) == true);
+    REQUIRE(vx2fmt::read_header(stream, in_headers) == true);
 
     REQUIRE(in_headers.size() == out_headers.size());
     for (const auto &val : out_headers) {

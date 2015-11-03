@@ -42,9 +42,9 @@ namespace vx2fmt {
 
 typedef std::map<std::string, std::string> dict_t;
 
-bool write_vx2fmt_header(std::ostream &out, const dict_t &headers);
+bool write_header(std::ostream &out, const dict_t &headers);
 
-bool read_vx2fmt_header(std::istream &in, dict_t &headers);
+bool read_header(std::istream &in, dict_t &headers);
 
 } // namespace vx2fmt
 
