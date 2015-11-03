@@ -4,13 +4,12 @@
 # based on osmium-tool's CMakeLists.txt by Jochen Topf.
 
 include_directories(include)
-include_directories(../src)
 include_directories(../include)
-
+include_directories(../vx2fmt)
 
 file(GLOB UNIT_TEST_SOURCES *.cpp)
 add_executable(unit_tests ${UNIT_TEST_SOURCES})
-target_link_libraries(unit_tests ${Boost_LIBRARIES} ${OSMIUM_LIBRARIES})
+target_link_libraries(unit_tests osmium-history-splitter-vx2fmt ${Boost_LIBRARIES} ${OSMIUM_LIBRARIES})
 add_test(NAME unit_tests COMMAND unit_tests)
 set_tests_properties(unit_tests PROPERTIES
   LABELS "unit"

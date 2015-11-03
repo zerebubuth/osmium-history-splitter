@@ -60,7 +60,7 @@ add_definitions(-std=${USE_CPP_VERSION})
 
 # compiler & linker flags
 
-set(USUAL_COMPILE_OPTIONS "-g -ggdb -O0")
+set(USUAL_COMPILE_OPTIONS "-g -ggdb -O0 -fno-omit-frame-pointer")
 
 set(CMAKE_CXX_FLAGS_DEV "${USUAL_COMPILE_OPTIONS}"
   CACHE STRING "Flags used by the compiler during developer builds."
@@ -108,4 +108,4 @@ include_directories(include)
 # source files
 
 add_subdirectory(src)
-
+add_subdirectory(vx2fmt)
