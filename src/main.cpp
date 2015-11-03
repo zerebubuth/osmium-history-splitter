@@ -135,7 +135,7 @@ struct tile_map_array {
       m_array.resize(idx + 1);
     }
     tile_map_subarray &sub = m_array[idx];
-    sub.insert(k, v);
+    sub.insert(prt, v);
   }
 
   iter_pair_range<const_iterator> equal_range(key_type k) const {
@@ -143,7 +143,7 @@ struct tile_map_array {
     uint32_t idx = k >> 32;
     uint32_t prt = k & ((uint64_t(1) << 32) - 1);
     if (idx >= m_array.size()) {
-      iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(m_empty.end()), pair_snd_iterator(m_empty.end())));
+      return iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(m_empty.end()), pair_snd_iterator(m_empty.end())));
 
     } else {
       const tile_map_subarray &sub = m_array[idx];
@@ -154,6 +154,8 @@ struct tile_map_array {
   std::vector<tile_map_subarray> m_array;
   static const tile_map_subarray::cont_t m_empty;
 };
+
+const tile_map_subarray::cont_t tile_map_array::m_empty;
 
 } // anonymous namespace
 
