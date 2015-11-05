@@ -159,11 +159,25 @@ bool read_string(std::istream &in, std::string &s) {
 }
 
 bool write_header(std::ostream &out, const dict_t &headers) {
+  out.write(header_magic.data(), header_magic.size());
+  if (!out) { return false; }
+
+  return write_tags(out, headers);
+}
+
+bool read_header(std::istream &in, dict_t &headers) {
+  char magic[6];
+  in.read(magic, 6);
+  if (!in) { return false; }
+  if (strncmp(magic, header_magic.c_str(), 6) != 0) { return false; }
+
+  return read_tags(in, headers);
+}
+
+bool write_tags(std::ostream &out, const dict_t &tags) {
   bool ok = true;
 
-  out.write(header_magic.data(), header_magic.size());
-
-  for (const auto &val : headers) {
+  for (const auto &val : tags) {
     ok = write_string_prefix<1>(out, val.first);
     if (!ok) { return ok; }
 
@@ -175,21 +189,16 @@ bool write_header(std::ostream &out, const dict_t &headers) {
   return ok;
 }
 
-bool read_header(std::istream &in, dict_t &headers) {
+bool read_tags(std::istream &in, dict_t &tags) {
   bool ok = true;
   int flag = 0;
   std::string key, val;
-
-  char magic[6];
-  in.read(magic, 6);
-  if (!in) { return false; }
-  if (strncmp(magic, header_magic.c_str(), 6) != 0) { return false; }
 
   while ((ok = read_string_prefix<1>(in, key, flag)) && (flag == 1)) {
     ok = read_string(in, val);
 
     if (ok) {
-      headers.insert(std::make_pair(key, val));
+      tags.insert(std::make_pair(key, val));
     }
   }
 

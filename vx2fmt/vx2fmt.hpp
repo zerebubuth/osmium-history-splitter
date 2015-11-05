@@ -46,6 +46,18 @@ bool write_header(std::ostream &out, const dict_t &headers);
 
 bool read_header(std::istream &in, dict_t &headers);
 
+bool write_metadata(std::ostream &out,
+                    uint64_t id, uint64_t version, uint64_t uid, uint64_t unix_timestamp,
+                    uint64_t changeset_id, bool visible);
+
+bool read_metadata(std::istream &in,
+                   uint64_t &id, uint64_t &version, uint64_t &uid, uint64_t &unix_timestamp,
+                   uint64_t &changeset_id, bool &visible);
+
+bool write_tags(std::ostream &out, const dict_t &tags);
+
+bool read_tags(std::istream &in, dict_t &tags);
+
 } // namespace vx2fmt
 
 #endif // OSMIUM_HISTORY_SPLITTER_VX2FMT_HPP
