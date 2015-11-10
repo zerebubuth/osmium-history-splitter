@@ -86,7 +86,7 @@ inline void iterate(Iterator &it, const Iterator &end, Func func) {
   }
 }
 
-template <typename TileSet, typename Iterator>
+template <typename TileSet, int Zoom, typename Iterator>
 inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
   static const double max_coord = osmium::geom::detail::max_coordinate_epsg3857;
   TileSet tiles;
@@ -108,13 +108,15 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
           coords = osmium::geom::lonlat_to_mercator(coords);
 
           // tiles are named by the morton code of the x,y coord pair.
-          // clamp tile coords to 0, 65535 to avoid overflow.
-          double x = double(1 << 16) * 0.5 * (coords.x + max_coord) / max_coord;
-          if (x <     0.0) { x =     0.0; }
-          if (x > 65535.0) { x = 65535.0; }
-          double y = double(1 << 16) * 0.5 * (max_coord - coords.y) / max_coord;
-          if (y <     0.0) { y =     0.0; }
-          if (y > 65535.0) { y = 65535.0; }
+          // clamp tile coords to range extent to avoid overflow.
+          const double world_size = double(1 << Zoom);
+          const double max_extent = world_size - 1.0;
+          double x = world_size * 0.5 * (coords.x + max_coord) / max_coord;
+          if (x <        0.0) { x =        0.0; }
+          if (x > max_extent) { x = max_extent; }
+          double y = world_size * 0.5 * (max_coord - coords.y) / max_coord;
+          if (y <        0.0) { y =        0.0; }
+          if (y > max_extent) { y = max_extent; }
 
           auto tile_id = morton_code(uint16_t(x), uint16_t(y));
           tiles.insert(node.id(), tile_id);
@@ -130,8 +132,9 @@ template <typename TileSet, typename Iterator>
 inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &end,
                                                   const TileSet &node_tiles) {
   TileSet way_tiles, extra_node_tiles;
+  std::vector<std::pair<osmium::object_id_type, osmium::object_id_type> > way_nodes;
 
-  iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles] (const osmium::Way &way) {
+  iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles, &way_nodes] (const osmium::Way &way) {
       if (way.visible()) {
         const auto way_id = way.id();
 
@@ -143,16 +146,33 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
           }
         }
 
-        auto range = way_tiles.equal_range(way_id);
+        auto array = reinterpret_cast<osmium::object_id_type *>(alloca(sizeof(osmium::object_id_type) * way.nodes().size()));
+        auto ptr = array;
         for (const auto &nd : way.nodes()) {
-          const auto node_id = nd.ref();
+          *ptr++ = nd.ref();
+        }
+        std::sort(array, ptr);
+        ptr = std::unique(array, ptr);
 
-          for (auto tile : range) {
-            extra_node_tiles.insert(node_id, tile);
-          }
+        for (auto itr = array; itr != ptr; ++itr) {
+          way_nodes.push_back(std::make_pair(*itr, way_id));
         }
       }
     });
+
+  std::sort(way_nodes.begin(), way_nodes.end());
+  for (const auto &pair : way_nodes) {
+    auto range = way_tiles.equal_range(pair.second);
+    size_t num = 0;
+    for (auto itr = range.begin(); itr != range.end(); ++itr, ++num) {}
+    if (num > 100000) {
+      std::cerr << "node[" << pair.first << "] in " << num << " tiles!" << std::endl;
+      exit(1);
+    }
+    for (const auto tile : range) {
+      extra_node_tiles.insert(pair.first, tile);
+    }
+  }
 
   return std::move(std::make_pair(std::move(way_tiles), std::move(extra_node_tiles)));
 }

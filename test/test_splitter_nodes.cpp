@@ -67,7 +67,7 @@ TEST_CASE("Split nodes") {
     REQUIRE(std::distance(nodes.begin(), nodes.end()) == 1);
 
     auto it = nodes.begin();
-    auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
+    auto tiles = hsplitter::tiles_for_nodes<map_t, 16>(it, nodes.end());
 
     REQUIRE(tiles.m_map.size() == 1);
     REQUIRE(tiles.m_map.count(1) == 1);
@@ -115,7 +115,7 @@ TEST_CASE("Split nodes") {
     REQUIRE(std::distance(nodes.begin(), nodes.end()) == 2);
 
     auto it = nodes.begin();
-    auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
+    auto tiles = hsplitter::tiles_for_nodes<map_t, 16>(it, nodes.end());
 
     REQUIRE(tiles.m_map.size() == 1);
     REQUIRE(tiles.m_map.count(1) == 1);
@@ -164,7 +164,7 @@ TEST_CASE("Split nodes") {
     REQUIRE(std::distance(nodes.begin(), nodes.end()) == 2);
 
     auto it = nodes.begin();
-    auto tiles = hsplitter::tiles_for_nodes<map_t>(it, nodes.end());
+    auto tiles = hsplitter::tiles_for_nodes<map_t, 16>(it, nodes.end());
 
     REQUIRE(tiles.m_map.size() == 2);
     REQUIRE(tiles.m_map.count(1) == 1);
