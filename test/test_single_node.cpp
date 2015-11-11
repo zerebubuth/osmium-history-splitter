@@ -86,6 +86,6 @@ TEST_CASE("Single node") {
 
     REQUIRE(!reader.eof());
     osmium::memory::Buffer buffer = reader.read();
-    REQUIRE(std::distance(buffer.begin(), buffer.end()) == 0);
+    REQUIRE(!bool(buffer));
   }
 }
