@@ -113,6 +113,7 @@ struct tile_map_subarray {
     std::sort(m_array.begin(), m_array.end());
     auto itr = std::unique(m_array.begin(), m_array.end());
     m_array.erase(itr, m_array.end());
+    m_array.shrink_to_fit();
     m_unsorted_count = 0;
   }
 
@@ -151,6 +152,19 @@ struct tile_map_array {
     }
     tile_map_subarray &sub = m_array[idx];
     sub.insert(prt, v);
+  }
+
+  void freeze() {
+    size_t size = 0, post_size = 0;
+    for (tile_map_subarray &sub : m_array) {
+      size += sub.m_array.capacity();
+      sub.sort_array();
+      post_size += sub.m_array.capacity();
+    }
+    size_t item_size = sizeof(tile_map_subarray::cont_t::value_type);
+    std::cout << "pre-freeze size: " << (size * item_size) << std::endl;
+    std::cout << "post-freeze size: " << (post_size * item_size) << std::endl;
+    std::cout << "(freeze) item size: " << item_size << std::endl;
   }
 
   iter_pair_range<const_iterator> equal_range(key_type k) const {
