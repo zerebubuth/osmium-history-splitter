@@ -257,12 +257,11 @@ namespace detail {
 template <typename TileSet>
 inline void add_tiles_for_id(const TileSet &from,
                              typename TileSet::key_type from_id,
-                             TileSet &to,
-                             typename TileSet::key_type to_id) {
+                             std::vector<tile_t> &to) {
   auto range = from.equal_range(from_id);
 
   for (auto tile : range) {
-    to.insert(to_id, tile);
+    to.push_back(tile);
   }
 }
 } // namespace detail
@@ -286,6 +285,7 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
       if (rel.visible()) {
         const auto rel_id = rel.id();
         if (last_id != rel_id) {
+          assert(last_id < rel_id);
           detail::insert_sorted_and_clear(rel_tiles, last_id, buffer);
           detail::insert_sorted_pairs_and_clear(rel_members, last_id, mbr_buffer);
           last_id = rel_id;
@@ -295,11 +295,11 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
           const auto member_ref = member.ref();
 
           if (member.type() == osmium::item_type::node) {
-            add_tiles_for_id(node_tiles, member_ref, rel_tiles, rel_id);
-            add_tiles_for_id(extra_node_tiles, member_ref, rel_tiles, rel_id);
+            add_tiles_for_id(node_tiles, member_ref, buffer);
+            add_tiles_for_id(extra_node_tiles, member_ref, buffer);
 
           } else if (member.type() == osmium::item_type::way) {
-            add_tiles_for_id(way_tiles, member_ref, rel_tiles, rel_id);
+            add_tiles_for_id(way_tiles, member_ref, buffer);
 
           } else {
             mbr_buffer.push_back(member_ref);
