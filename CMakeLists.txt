@@ -27,7 +27,7 @@ set(AUTHOR "Matt Amos <zerebubuth@gmail.com>")
 
 # external dependencies
 
-find_package(Boost REQUIRED COMPONENTS program_options)
+find_package(Boost REQUIRED COMPONENTS program_options filesystem system)
 include_directories(SYSTEM ${Boost_INCLUDE_DIRS})
 
 find_package(Osmium REQUIRED COMPONENTS io)

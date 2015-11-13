@@ -62,22 +62,24 @@ struct tile_file {
   typedef hsplitter::tile_t tile_t;
 
   tile_file()
-    : m_id(0), m_buffer() {
+    : m_id(0), m_buffer(), m_buffer_dir() {
   }
 
-  tile_file(tile_t id, size_t capacity)
+  tile_file(tile_t id, size_t capacity, const std::string &buffer_dir)
     : m_id(id),
-      m_buffer(new buffer(capacity, osmium::memory::Buffer::auto_grow::yes)) {
+      m_buffer(new buffer(capacity, osmium::memory::Buffer::auto_grow::yes)),
+      m_buffer_dir(buffer_dir) {
     set_callback();
   }
 
-  tile_file(tile_file &&tf) : m_id(tf.m_id), m_buffer() {
+  tile_file(tile_file &&tf) : m_id(tf.m_id), m_buffer(), m_buffer_dir(tf.m_buffer_dir) {
     swap_buffer(tf.m_buffer);
   }
   tile_file(const tile_file &) = delete;
   const tile_file &operator=(tile_file &&tf) {
     m_id = tf.m_id;
     swap_buffer(tf.m_buffer);
+    m_buffer_dir = tf.m_buffer_dir;
     return *this;
   }
   const tile_file &operator=(const tile_file &) = delete;
@@ -90,14 +92,15 @@ struct tile_file {
 
   void flush() {
     assert(!empty());
-    static_flush(m_id, *m_buffer);
+    static_flush(m_id, *m_buffer, m_buffer_dir);
   }
 
-  static void static_flush(hsplitter::tile_t id, osmium::memory::Buffer &buffer) {
+  static void static_flush(hsplitter::tile_t id, osmium::memory::Buffer &buffer,
+                           const std::string &buffer_dir) {
     assert(buffer);
     if (buffer.begin() != buffer.end()) {
       // TODO: configurable, default to $TMPDIR
-      std::string filename = (boost::format("tiles/%1%.buf") % id).str();
+      std::string filename = (boost::format("%1%/%2%.buf") % buffer_dir % id).str();
       std::ofstream file(filename, std::ios::binary | std::ios::ate | std::ios::app);
       file.write(reinterpret_cast<const char *>(buffer.data()), buffer.committed());
       buffer.clear();
@@ -110,6 +113,7 @@ struct tile_file {
   void swap(tile_file &tf) {
     std::swap(m_id, tf.m_id);
     swap_buffer(tf.m_buffer);
+    std::swap(m_buffer_dir, tf.m_buffer_dir);
   }
 
   bool empty() const {
@@ -117,6 +121,7 @@ struct tile_file {
   }
 
   tile_t m_id;
+  std::string m_buffer_dir;
 
 private:
   buffer_ptr m_buffer;
@@ -134,9 +139,10 @@ private:
 
   void set_callback() {
     const hsplitter::tile_t id = m_id;
+    const std::string buffer_dir = m_buffer_dir;
     if (m_buffer) {
-      m_buffer->set_full_callback([id](osmium::memory::Buffer &b) {
-          static_flush(id, b);
+      m_buffer->set_full_callback([id, buffer_dir](osmium::memory::Buffer &b) {
+          static_flush(id, b, buffer_dir);
         });
     }
   }
@@ -152,9 +158,10 @@ struct tile_grid {
       >
     > mru_tile_set;
 
-  tile_grid(size_t n_tiles, size_t capacity) {
+  tile_grid(size_t n_tiles, size_t capacity, const std::string &buffer_dir) {
+    m_buffer_dir = buffer_dir;
     for (size_t i = 0; i < n_tiles; ++i) {
-      tile_file tf(0, capacity);
+      tile_file tf(0, capacity, m_buffer_dir);
       m_free_tiles.emplace_back(std::move(tf));
     }
   }
@@ -172,6 +179,7 @@ struct tile_grid {
       tf.swap(m_free_tiles.front());
       m_free_tiles.pop_front();
       tf.m_id = id;
+      tf.m_buffer_dir = m_buffer_dir;
       auto pair = tile_idx.emplace(std::move(tf));
       itr = pair.first;
     }
@@ -203,6 +211,7 @@ struct tile_grid {
 private:
   std::list<tile_file> m_free_tiles;
   mru_tile_set m_open_tiles;
+  std::string m_buffer_dir;
 };
 
 } // namespace hsplitter

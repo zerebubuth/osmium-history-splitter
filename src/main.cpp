@@ -11,6 +11,7 @@
 #include "tile_map_array.hpp"
 
 #include <boost/format.hpp>
+#include <boost/filesystem.hpp>
 
 #include <iostream>
 #include <map>
@@ -24,6 +25,7 @@
 
 using hsplitter::tile_file;
 using hsplitter::tile_grid;
+namespace bfs = boost::filesystem;
 
 namespace hsplitter {
 size_t g_evictions = 0, g_flushes = 0;
@@ -143,7 +145,8 @@ std::vector<Container> split_into_n(size_t n, const Container &c) {
 
 std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &tile_ids,
                                   const osmium::io::Header &header,
-                                  size_t thread_id) {
+                                  size_t thread_id, const std::string &buffer_dir,
+                                  const std::string &output_dir) {
   size_t count = 0, num_tiles = tile_ids.size();
   std::exception_ptr exc;
 
@@ -156,9 +159,8 @@ std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &t
         }
       }
 
-      // TODO: configurable, get location for tmp from grid
-      std::string input_filename = (boost::format("tiles/%1%.buf") % tile_id).str();
-      std::string output_filename = (boost::format("tiles/%1%.osh.pbf") % tile_id).str();
+      std::string input_filename = (boost::format("%1%/%2%.buf") % buffer_dir % tile_id).str();
+      std::string output_filename = (boost::format("%1%/%2%.osh.pbf") % output_dir % tile_id).str();
 
       int fd = ::open(input_filename.c_str(), O_RDONLY);
       if (fd == -1) {
@@ -178,7 +180,7 @@ std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &t
       writer.close();
       mapping.unmap();
       ::close(fd);
-      // TODO: rm buffer file
+      bfs::remove(output_filename);
     }
   } catch (...) {
     exc = std::current_exception();
@@ -195,12 +197,18 @@ int main(int argc, char *argv[]) {
     std::cerr << "Usage: " << argv[0] << " INFILE\n";
     return 1;
   }
+  size_t num_threads = 4;
+  std::string input_file_name = argv[0];
+  std::string buffer_dir("buffer");
+  std::string output_dir("tiles");
+  size_t grid_num = 1000;
+  size_t grid_size = 100*1024;
 
   tileset_t node_tiles, way_tiles, extra_node_tiles, rel_tiles, extra_rel_tiles;
 
   std::cerr << "First pass..." << std::endl;
   { // first pass through file
-    osmium::io::File infile(argv[1]);
+    osmium::io::File infile(input_file_name);
     osmium::io::Reader reader(infile, osmium::osm_entity_bits::nwr);
     auto itr = osmium::io::make_input_iterator_range<osmium::OSMObject>(reader).begin();
 
@@ -233,7 +241,10 @@ int main(int argc, char *argv[]) {
   // std::cout << "rel_tiles:\n"; print_histograms(rel_tiles, std::cout);
   // std::cout << "extra_rel_tiles:\n"; print_histograms(extra_rel_tiles, std::cout);
 
-  tile_grid grid(1000, 100*1024);
+  bfs::create_directories(buffer_dir);
+  bfs::create_directories(output_dir);
+
+  tile_grid grid(grid_num, grid_size, buffer_dir);
   std::unordered_set<hsplitter::tile_t> all_tiles;
   osmium::io::Header header;
   size_t count = 0;
@@ -297,12 +308,11 @@ int main(int argc, char *argv[]) {
   std::cerr << "Converting buffers..." << std::endl;
   count = 0;
 
-  size_t num_threads = 4;
   std::vector<std::unordered_set<hsplitter::tile_t> > thread_args =
     split_into_n(num_threads, all_tiles);
   std::vector<std::future<std::exception_ptr> > threads;
   for (size_t i = 0; i < thread_args.size(); ++i) {
-    threads.push_back(std::async(std::launch::async, convert_buffer, thread_args[i], header, i));
+    threads.push_back(std::async(std::launch::async, convert_buffer, thread_args[i], header, i, buffer_dir, output_dir));
   }
   std::exception_ptr exc;
   for (auto &future : threads) {
