@@ -12,6 +12,7 @@
 
 #include <boost/format.hpp>
 #include <boost/filesystem.hpp>
+#include <boost/program_options.hpp>
 
 #include <iostream>
 #include <map>
@@ -26,6 +27,7 @@
 using hsplitter::tile_file;
 using hsplitter::tile_grid;
 namespace bfs = boost::filesystem;
+namespace bpo = boost::program_options;
 
 namespace hsplitter {
 size_t g_evictions = 0, g_flushes = 0;
@@ -193,16 +195,43 @@ std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &t
 int main(int argc, char *argv[]) {
   using tileset_t = hsplitter::tile_map_array;
 
-  if (argc != 2) {
-    std::cerr << "Usage: " << argv[0] << " INFILE\n";
-    return 1;
-  }
-  size_t num_threads = 4;
-  std::string input_file_name = argv[0];
+  size_t num_threads = 1;
+  std::string input_file_name;
   std::string buffer_dir("buffer");
   std::string output_dir("tiles");
   size_t grid_num = 1000;
   size_t grid_size = 100*1024;
+
+  bpo::options_description desc("NEAT tiles splitter options:");
+  desc.add_options()
+    ("help", "Display this message")
+    ("threads,t", bpo::value<size_t>(&num_threads)->default_value(1), "Number of threads to use.")
+    ("buffer-dir", bpo::value<std::string>(&buffer_dir)->default_value("buffer"), "Directory to use for buffer temporary files.")
+    ("output-dir", bpo::value<std::string>(&output_dir)->default_value("output"), "Directory to use for output PBF files.")
+    ("grid-num", bpo::value<size_t>(&grid_num)->default_value(1000), "Number of temporary buffers to keep in memory.")
+    ("grid-size", bpo::value<size_t>(&grid_size)->default_value(100 * 1024), "Size of each temporary buffer.")
+    ("input-file", bpo::value<std::string>(&input_file_name), "Input history file to read.")
+    ;
+
+  bpo::positional_options_description pos_desc;
+  pos_desc.add("input-file", 1);
+
+  bpo::variables_map vm;
+  bpo::store(bpo::command_line_parser(argc, argv).
+             options(desc).positional(pos_desc).run(),
+             vm);
+  bpo::notify(vm);
+
+  if (vm.count("help")) {
+    std::cout << desc << "\n";
+    return 1;
+  }
+
+  if (vm.count("input-file") != 1) {
+    std::cerr << "Must provide one input file:\n";
+    std::cerr << desc << "\n";
+    return 1;
+  }
 
   tileset_t node_tiles, way_tiles, extra_node_tiles, rel_tiles, extra_rel_tiles;
 
@@ -251,7 +280,7 @@ int main(int argc, char *argv[]) {
 
   std::cerr << "Second pass..." << std::endl;
   { // second pass through file
-    osmium::io::File infile(argv[1]);
+    osmium::io::File infile(input_file_name);
     osmium::io::Reader reader(infile, osmium::osm_entity_bits::nwr);
     auto input_range = osmium::io::make_input_iterator_range<osmium::OSMObject>(reader);
 
