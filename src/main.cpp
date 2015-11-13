@@ -40,7 +40,7 @@ void insert_tiles_from(const osmium::OSMObject &o, const TilesType &tiles,
     target.insert(range.begin(), range.end());
   }
 }
-
+/*
 template <typename T>
 struct histogram {
   histogram() : m_counts(sizeof(T) * CHAR_BIT + 1, 0) {}
@@ -119,6 +119,72 @@ void print_histograms(const hsplitter::tile_map_array &array, std::ostream &out)
   out << " keys,   " << keys_histogram << std::endl;
   out << " values, " << values_histogram << std::endl;
   out << " counts, " << count_histogram << std::endl;
+}
+*/
+template <typename Container>
+std::vector<Container> split_into_n(size_t n, const Container &c) {
+  auto itr = c.begin();
+  auto remaining = c.size();
+  std::vector<Container> parts(n);
+
+  while (remaining > n) {
+    for (size_t i = 0; i < n; ++i) {
+      parts[i].insert(*itr++);
+    }
+    remaining -= n;
+  }
+  size_t i = 0;
+  while (itr != c.end()) {
+    parts[i].insert(*itr++);
+  }
+
+  return parts;
+}
+
+std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &tile_ids,
+                                  const osmium::io::Header &header,
+                                  size_t thread_id) {
+  size_t count = 0, num_tiles = tile_ids.size();
+  std::exception_ptr exc;
+
+  try {
+    for (auto tile_id : tile_ids) {
+      if (thread_id == 0) {
+        ++count;
+        if ((count & 0xff) == 0) {
+          std::cerr << count << " / " << num_tiles << std::endl;
+        }
+      }
+
+      // TODO: configurable, get location for tmp from grid
+      std::string input_filename = (boost::format("tiles/%1%.buf") % tile_id).str();
+      std::string output_filename = (boost::format("tiles/%1%.osh.pbf") % tile_id).str();
+
+      int fd = ::open(input_filename.c_str(), O_RDONLY);
+      if (fd == -1) {
+        throw std::runtime_error("Unable to open file.");
+      }
+
+      struct ::stat status;
+      if (::fstat(fd, &status) == -1) {
+        throw std::runtime_error("Unable to get file status.");
+      }
+
+      osmium::util::MemoryMapping mapping(status.st_size, osmium::util::MemoryMapping::mapping_mode::readonly, fd, 0);
+      osmium::memory::Buffer buffer(mapping.get_addr<unsigned char>(), status.st_size);
+      osmium::io::File outfile(output_filename, "osh.pbf");
+      osmium::io::Writer writer(outfile, header, osmium::io::overwrite::allow);
+      writer(std::move(buffer));
+      writer.close();
+      mapping.unmap();
+      ::close(fd);
+      // TODO: rm buffer file
+    }
+  } catch (...) {
+    exc = std::current_exception();
+  }
+
+  return exc;
 }
 } // anonymous namespace
 
@@ -231,44 +297,23 @@ int main(int argc, char *argv[]) {
   std::cerr << "Converting buffers..." << std::endl;
   count = 0;
 
-  //std::vector<std::future<void> > threads;
-  for (auto tile_id : all_tiles) {
-    ++count;
-    if ((count & 0xff) == 0) {
-      std::cerr << count << " / " << all_tiles.size() << std::endl;
-    }
-
-    //auto thread = osmium::thread::Pool::instance().submit([tile_id, &header] () {
-    // TODO: configurable, get location for tmp from grid
-    std::string input_filename = (boost::format("tiles/%1%.buf") % tile_id).str();
-    std::string output_filename = (boost::format("tiles/%1%.osh.pbf") % tile_id).str();
-
-    int fd = ::open(input_filename.c_str(), O_RDONLY);
-    if (fd == -1) {
-      throw std::runtime_error("Unable to open file.");
-    }
-
-    struct ::stat status;
-    if (::fstat(fd, &status) == -1) {
-      throw std::runtime_error("Unable to get file status.");
-    }
-
-    osmium::util::MemoryMapping mapping(status.st_size, osmium::util::MemoryMapping::mapping_mode::readonly, fd, 0);
-    osmium::memory::Buffer buffer(mapping.get_addr<unsigned char>(), status.st_size);
-    osmium::io::File outfile(output_filename, "osh.pbf");
-    osmium::io::Writer writer(outfile, header, osmium::io::overwrite::allow);
-    writer(std::move(buffer));
-    writer.close();
-    mapping.unmap();
-    ::close(fd);
-    // TODO: rm buffer file
-    //  });
-    //threads.push_back(std::move(thread));
+  size_t num_threads = 4;
+  std::vector<std::unordered_set<hsplitter::tile_t> > thread_args =
+    split_into_n(num_threads, all_tiles);
+  std::vector<std::future<std::exception_ptr> > threads;
+  for (size_t i = 0; i < thread_args.size(); ++i) {
+    threads.push_back(std::async(std::launch::async, convert_buffer, thread_args[i], header, i));
   }
-
-  // for (auto &thread : threads) {
-  //   osmium::thread::wait_until_done(thread);
-  // }
+  std::exception_ptr exc;
+  for (auto &future : threads) {
+    auto thread_exc = future.get();
+    if (thread_exc) {
+      exc = thread_exc;
+    }
+  }
+  if (exc) {
+    std::rethrow_exception(exc);
+  }
 
   return 0;
 }
