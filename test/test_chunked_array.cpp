@@ -36,7 +36,27 @@ DEALINGS IN THE SOFTWARE.
 using hsplitter::container::chunked_array;
 
 TEST_CASE("Chunked array") {
-  SECTION("should act like a container") {
+  SECTION("should act like a container in one chunk") {
+    chunked_array<int, 20> array;
+    array.push_back(1);
+    array.push_back(2);
+    array.push_back(3);
+    array.push_back(4);
+    array.push_back(5);
+
+    REQUIRE(array.size() == 5);
+    REQUIRE((array.end() - array.begin()) == 5);
+
+    auto itr = array.begin();
+    REQUIRE(*itr == 1); ++itr;
+    REQUIRE(*itr == 2); ++itr;
+    REQUIRE(*itr == 3); ++itr;
+    REQUIRE(*itr == 4); ++itr;
+    REQUIRE(*itr == 5); ++itr;
+    REQUIRE(itr == array.end());
+  }
+
+  SECTION("should act like a container with many chunks") {
     chunked_array<int, 2> array;
     array.push_back(1);
     array.push_back(2);
@@ -54,5 +74,78 @@ TEST_CASE("Chunked array") {
     REQUIRE(*itr == 4); ++itr;
     REQUIRE(*itr == 5); ++itr;
     REQUIRE(itr == array.end());
+  }
+
+  SECTION("should default construct to empty") {
+    chunked_array<int, 100> array;
+    REQUIRE(array.empty());
+    REQUIRE(array.begin() == array.end());
+    REQUIRE(array.size() == 0);
+  }
+
+  SECTION("should be able to reverse iterate") {
+    chunked_array<int, 2> array;
+    array.push_back(1);
+    array.push_back(2);
+    array.push_back(3);
+    array.push_back(4);
+    array.push_back(5);
+
+    REQUIRE(array.size() == 5);
+    REQUIRE((array.end() - array.begin()) == 5);
+
+    auto itr = array.end();
+    --itr; REQUIRE(*itr == 5);
+    --itr; REQUIRE(*itr == 4);
+    --itr; REQUIRE(*itr == 3);
+    --itr; REQUIRE(*itr == 2);
+    --itr; REQUIRE(*itr == 1);
+    REQUIRE(itr == array.begin());
+  }
+
+  SECTION("should be able to do reverse iterator arithmetic") {
+    chunked_array<int, 2> array;
+    array.push_back(1);
+    array.push_back(2);
+    array.push_back(3);
+    array.push_back(4);
+    array.push_back(5);
+
+    REQUIRE(array.size() == 5);
+    REQUIRE((array.end() - array.begin()) == 5);
+
+    auto itr = array.end();
+    REQUIRE(*(itr - 1) == 5);
+    REQUIRE(*(itr - 2) == 4);
+    REQUIRE(*(itr - 3) == 3);
+    REQUIRE(*(itr - 4) == 2);
+    REQUIRE(*(itr - 5) == 1);
+
+    REQUIRE(itr[-1] == 5);
+    REQUIRE(itr[-2] == 4);
+    REQUIRE(itr[-3] == 3);
+    REQUIRE(itr[-4] == 2);
+    REQUIRE(itr[-5] == 1);
+  }
+
+  SECTION("should be sortable") {
+    chunked_array<int, 20> array;
+    for (int i = 0; i <= 100; ++i) {
+      array.push_back(100 - i);
+    }
+
+    REQUIRE(array.size() == 101);
+    REQUIRE((array.end() - array.begin()) == 101);
+
+    std::sort(array.begin(), array.end());
+
+    REQUIRE(array.size() == 101);
+    REQUIRE((array.end() - array.begin()) == 101);
+
+    for (int i = 0; i <= 100; ++i) {
+      auto itr = array.begin() + i;
+      REQUIRE(*itr == i);
+      REQUIRE(array.begin()[i] == i);
+    }
   }
 }

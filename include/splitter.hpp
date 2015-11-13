@@ -46,6 +46,8 @@ namespace hsplitter {
 
 using tile_t = uint32_t;
 
+namespace detail {
+
 inline uint32_t interleave(uint32_t n) {
   n &= 0x0000ffffUL;
   n = (n | (n <<  8)) & 0x00ff00ffUL;
@@ -86,13 +88,61 @@ inline void iterate(Iterator &it, const Iterator &end, Func func) {
   }
 }
 
+template <typename TileSet, typename ValueType>
+void insert_sorted_and_clear(TileSet &tiles,
+                             osmium::object_id_type id,
+                             std::vector<ValueType> &buffer) {
+  std::sort(buffer.begin(), buffer.end());
+  const auto end = std::unique(buffer.begin(), buffer.end());
+  for (auto itr = buffer.begin(); itr != end; ++itr) {
+    tiles.insert(id, *itr);
+  }
+  buffer.clear();
+}
+
+template <typename TileSet, typename ValueType>
+void insert_sorted_pairs_and_clear(TileSet &tiles,
+                                   std::vector<ValueType> &buffer,
+                                   osmium::object_id_type id) {
+  std::sort(buffer.begin(), buffer.end());
+  const auto end = std::unique(buffer.begin(), buffer.end());
+  for (auto itr = buffer.begin(); itr != end; ++itr) {
+    tiles.push_back(std::make_pair(*itr, id));
+  }
+  buffer.clear();
+}
+
+template <typename TileSet, typename ValueType>
+void insert_sorted_pairs_and_clear(TileSet &tiles,
+                                   osmium::object_id_type id,
+                                   std::vector<ValueType> &buffer) {
+  std::sort(buffer.begin(), buffer.end());
+  const auto end = std::unique(buffer.begin(), buffer.end());
+  for (auto itr = buffer.begin(); itr != end; ++itr) {
+    tiles.push_back(std::make_pair(id, *itr));
+  }
+  buffer.clear();
+}
+
+} // namespace detail
+
 template <typename TileSet, int Zoom, typename Iterator>
 inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
   static const double max_coord = osmium::geom::detail::max_coordinate_epsg3857;
   TileSet tiles;
+  // a local buffer to take all the tile IDs so that we
+  // can sort & uniq them before pushing the result onto
+  // the tile list.
+  std::vector<tile_t> buffer;
+  osmium::object_id_type last_id = 0;
 
-  iterate<osmium::Node>(it, end, [&tiles] (const osmium::Node &node) {
+  detail::iterate<osmium::Node>(it, end, [&] (const osmium::Node &node) {
       if (node.visible() && node.location().valid()) {
+        if (last_id != node.id()) {
+          detail::insert_sorted_and_clear(tiles, last_id, buffer);
+          last_id = node.id();
+        }
+
         // note: we've already checked for validity, no need to do it
         // again.
         double lat = node.location().lat_without_check();
@@ -118,11 +168,15 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
           if (y <        0.0) { y =        0.0; }
           if (y > max_extent) { y = max_extent; }
 
-          auto tile_id = morton_code(uint16_t(x), uint16_t(y));
-          tiles.insert(node.id(), tile_id);
+          auto tile_id = detail::morton_code(uint16_t(x), uint16_t(y));
+
+          buffer.push_back(tile_id);
         }
       }
     });
+  if (!buffer.empty()) {
+    detail::insert_sorted_and_clear(tiles, last_id, buffer);
+  }
 
   return std::move(tiles);
 }
@@ -133,35 +187,54 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
                                                   const TileSet &node_tiles) {
   TileSet way_tiles, extra_node_tiles;
   std::vector<std::pair<osmium::object_id_type, osmium::object_id_type> > way_nodes;
+  // a local buffer to take all the tile IDs so that we
+  // can sort & uniq them before pushing the result onto
+  // the tile list.
+  std::vector<tile_t> buffer;
+  osmium::object_id_type last_id = 0;
 
-  iterate<osmium::Way>(it, end, [&way_tiles, &extra_node_tiles, &node_tiles, &way_nodes] (const osmium::Way &way) {
+  // same trick for the way nodes
+  std::vector<osmium::object_id_type> wn_buffer;
+
+  detail::iterate<osmium::Way>(it, end, [&] (const osmium::Way &way) {
       if (way.visible()) {
         const auto way_id = way.id();
+        if (last_id != way_id) {
+          detail::insert_sorted_and_clear(way_tiles, last_id, buffer);
+          detail::insert_sorted_pairs_and_clear(way_nodes, wn_buffer, last_id);
+          last_id = way_id;
+        }
 
         for (const auto &nd : way.nodes()) {
           auto range = node_tiles.equal_range(nd.ref());
 
           for (auto tile : range) {
-            way_tiles.insert(way_id, tile);
+            buffer.push_back(tile);
           }
         }
 
-        auto array = reinterpret_cast<osmium::object_id_type *>(alloca(sizeof(osmium::object_id_type) * way.nodes().size()));
-        auto ptr = array;
         for (const auto &nd : way.nodes()) {
-          *ptr++ = nd.ref();
-        }
-        std::sort(array, ptr);
-        ptr = std::unique(array, ptr);
-
-        for (auto itr = array; itr != ptr; ++itr) {
-          way_nodes.push_back(std::make_pair(*itr, way_id));
+          wn_buffer.push_back(nd.ref());
         }
       }
     });
+  if (!buffer.empty()) {
+    detail::insert_sorted_and_clear(way_tiles, last_id, buffer);
+  }
+  if (!wn_buffer.empty()) {
+    detail::insert_sorted_pairs_and_clear(way_nodes, wn_buffer, last_id);
+  }
 
   std::sort(way_nodes.begin(), way_nodes.end());
+  auto itr = std::unique(way_nodes.begin(), way_nodes.end());
+  assert(itr == way_nodes.end()); // way nodes should have no duplicates
+
+  last_id = 0;
   for (const auto &pair : way_nodes) {
+    if (last_id != pair.first) {
+      detail::insert_sorted_and_clear(extra_node_tiles, last_id, buffer);
+      last_id = pair.first;
+    }
     auto range = way_tiles.equal_range(pair.second);
     size_t num = 0;
     for (auto itr = range.begin(); itr != range.end(); ++itr, ++num) {}
@@ -169,9 +242,12 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
       std::cerr << "node[" << pair.first << "] in " << num << " tiles!" << std::endl;
       exit(1);
     }
-    for (const auto tile : range) {
-      extra_node_tiles.insert(pair.first, tile);
+    for (auto tile : range) {
+      buffer.push_back(tile);
     }
+  }
+  if (!buffer.empty()) {
+    detail::insert_sorted_and_clear(extra_node_tiles, last_id, buffer);
   }
 
   return std::move(std::make_pair(std::move(way_tiles), std::move(extra_node_tiles)));
@@ -198,11 +274,22 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
                                                 const TileSet &extra_node_tiles) {
   using detail::add_tiles_for_id;
   TileSet rel_tiles, extra_rel_tiles;
-  std::unordered_map<osmium::object_id_type, std::unordered_set<osmium::object_id_type> > rel_members;
+  std::vector<std::pair<osmium::object_id_type, osmium::object_id_type> > rel_members;
+  // a local buffer to take all the tile IDs so that we
+  // can sort & uniq them before pushing the result onto
+  // the tile list.
+  std::vector<tile_t> buffer;
+  osmium::object_id_type last_id = 0;
+  std::vector<osmium::object_id_type> mbr_buffer;
 
-  iterate<osmium::Relation>(it, end, [&node_tiles, &way_tiles, &extra_node_tiles, &rel_tiles, &rel_members] (const osmium::Relation &rel) {
+  detail::iterate<osmium::Relation>(it, end, [&] (const osmium::Relation &rel) {
       if (rel.visible()) {
         const auto rel_id = rel.id();
+        if (last_id != rel_id) {
+          detail::insert_sorted_and_clear(rel_tiles, last_id, buffer);
+          detail::insert_sorted_pairs_and_clear(rel_members, last_id, mbr_buffer);
+          last_id = rel_id;
+        }
 
         for (const auto &member : rel.members()) {
           const auto member_ref = member.ref();
@@ -215,16 +302,34 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
             add_tiles_for_id(way_tiles, member_ref, rel_tiles, rel_id);
 
           } else {
-            rel_members[rel_id].insert(member_ref);
+            mbr_buffer.push_back(member_ref);
           }
         }
       }
     });
+  if (!buffer.empty()) {
+    detail::insert_sorted_and_clear(rel_tiles, last_id, buffer);
+  }
+  if (!mbr_buffer.empty()) {
+    detail::insert_sorted_pairs_and_clear(rel_members, last_id, mbr_buffer);
+  }
 
+  auto itr = std::unique(rel_members.begin(), rel_members.end());
+  assert(itr == rel_members.end()); // members should not be duplicated, and should be sorted already.
+
+  last_id = 0;
   for (const auto &rel_member : rel_members) {
-    for (auto member_id : rel_member.second) {
-      add_tiles_for_id(rel_tiles, member_id, extra_rel_tiles, rel_member.first);
+    if (last_id != rel_member.first) {
+      detail::insert_sorted_and_clear(extra_rel_tiles, last_id, buffer);
+      last_id = rel_member.first;
     }
+    auto range = rel_tiles.equal_range(rel_member.second);
+    for (auto tile : range) {
+      buffer.push_back(tile);
+    }
+  }
+  if (!buffer.empty()) {
+    detail::insert_sorted_and_clear(extra_rel_tiles, last_id, buffer);
   }
 
   return std::move(std::make_pair(std::move(rel_tiles), std::move(extra_rel_tiles)));

@@ -42,16 +42,20 @@ DEALINGS IN THE SOFTWARE.
 namespace hsplitter {
 namespace container {
 
-template <typename OuterIter, typename InnerIter>
+template <typename OuterIter, typename InnerIter, size_t InnerSize>
 struct nested_iterator
   : public std::iterator<std::random_access_iterator_tag,
                          typename InnerIter::value_type> {
   typedef std::iterator<std::random_access_iterator_tag,
-                        typename InnerIter::value_type> parent;
+                        typename InnerIter::value_type,
+                        typename InnerIter::difference_type,
+                        typename InnerIter::pointer,
+                        typename InnerIter::reference> parent;
   typedef typename parent::pointer pointer;
   typedef typename parent::reference reference;
   typedef typename parent::difference_type difference_type;
-  typedef nested_iterator<OuterIter, InnerIter> self;
+  typedef typename parent::value_type value_type;
+  typedef nested_iterator<OuterIter, InnerIter, InnerSize> self;
 
   nested_iterator(OuterIter itr, OuterIter begin, OuterIter end)
     : m_outer(itr), m_outer_begin(begin), m_outer_end(end) {
@@ -68,7 +72,7 @@ struct nested_iterator
   reference operator*() { return *m_inner; }
   pointer operator->() { return m_inner.operator->(); }
 
-  inline const self &operator++() {
+  inline self &operator++() {
     if (m_outer != m_outer_end) {
       ++m_inner;
       if (m_inner == std::end(*m_outer)) {
@@ -103,9 +107,10 @@ struct nested_iterator
     return !operator==(other);
   }
 
-  inline const self &operator--() {
-    if (m_inner == std::begin(*m_outer) &&
-        m_outer != m_outer_begin) {
+  inline self &operator--() {
+    if ((m_inner == std::begin(*m_outer) &&
+         m_outer != m_outer_begin) ||
+        (m_outer == m_outer_end)) {
       --m_outer;
       m_inner = std::end(*m_outer);
     }
@@ -132,73 +137,74 @@ struct nested_iterator
     if (other > *this) {
       return -(other.operator-(*this));
 
-    } else if (m_outer == other.m_outer) {
-      if (m_outer == m_outer_end) {
-        return 0;
-      } else {
-        return m_inner - other.m_inner;
-      }
+    } else if (other.m_outer == m_outer_end) {
+      // must be end/end comparison, as other <= this.
+      return 0;
 
     } else {
-      InnerIter inner = other.m_inner;
-      OuterIter outer = other.m_outer;
-      difference_type d = 0;
+      InnerIter inner = m_inner;
+      OuterIter outer = m_outer;
 
-      while (outer != m_outer) {
-        d += std::end(*outer) - inner;
-        ++outer;
-        inner = std::begin(*outer);
+      if (outer == m_outer_end) {
+        --outer;
+        inner = std::end(*outer);
       }
-      if (outer != m_outer_end) {
-        d += m_inner - inner;
+
+      if (outer == other.m_outer) {
+        return inner - other.m_inner;
+
+      } else {
+        difference_type d1 = std::end(*other.m_outer) - other.m_inner;
+        difference_type d2 = InnerSize * ((outer - other.m_outer) - 1);
+        difference_type d3 = inner - std::begin(*outer);
+
+        return d1 + d2 + d3;
       }
-      return d;
     }
   }
 
-  const self &operator+=(difference_type i) {
+  self &operator+=(difference_type i) {
     if (i < 0) {
       operator-=(-i);
 
     } else if (i > 0) {
-      while (true) {
-        difference_type left_in_block = std::end(*m_outer) - m_inner;
-        if (i < left_in_block) {
-          m_inner += i;
-          break;
-        } else {
-          i -= left_in_block;
-          ++m_outer;
-          if (m_outer == m_outer_end) {
-            break;
-          }
-          m_inner = std::begin(*m_outer);
-        }
+      difference_type left_in_block = std::end(*m_outer) - m_inner;
+      assert(left_in_block >= 0);
+      if (i < left_in_block) {
+        m_inner += i;
+
+      } else {
+        i -= left_in_block;
+        m_outer += (i / InnerSize) + 1;
+        m_inner = std::begin(*m_outer) + (i % InnerSize);
       }
     }
 
     return *this;
   }
-  const self &operator-=(difference_type i) {
+  self &operator-=(difference_type i) {
     if (i < 0) {
       operator+=(-i);
 
-    } else {
-      while (true) {
-        difference_type left_in_block = m_inner - std::begin(*m_outer);
-        if (i <= left_in_block) {
-          m_inner -= i;
-          break;
+    } else if (i > 0) {
+      if (m_outer == m_outer_end) {
+        --m_outer;
+        m_inner = std::end(*m_outer);
+      }
 
-        } else {
-          i -= left_in_block;
-          if (m_outer == m_outer_begin) {
-            m_inner = std::begin(m_outer);
-            break;
-          }
-          --m_outer;
-          m_inner = std::end(m_outer);
-          --m_inner;
+      difference_type left_in_block = m_inner - std::begin(*m_outer);
+      assert(left_in_block >= 0);
+
+      if (i < left_in_block) {
+        m_inner -= i;
+
+      } else {
+        i -= left_in_block;
+        m_outer -= (i / InnerSize) + 1;
+        m_inner = std::end(*m_outer) - (i % InnerSize);
+        if (m_inner == std::end(*m_outer)) {
+          ++m_outer;
+          m_inner = std::begin(*m_outer);
         }
       }
     }
@@ -234,8 +240,8 @@ private:
   InnerIter m_inner;
 };
 
-template <typename It1, typename It2>
-inline nested_iterator<It1, It2> operator+(std::ptrdiff_t i, const nested_iterator<It1, It2> &it) {
+template <typename It1, typename It2, size_t S>
+inline nested_iterator<It1, It2, S> operator+(std::ptrdiff_t i, const nested_iterator<It1, It2, S> &it) {
   return it + i;
 }
 
@@ -243,10 +249,24 @@ template <typename T, size_t chunk_size = 16384>
 struct chunked_array {
   typedef std::vector<T> inner_type;
   typedef std::vector<inner_type> outer_type;
-  typedef nested_iterator<typename outer_type::iterator, typename inner_type::iterator> iterator;
+  typedef nested_iterator<typename outer_type::iterator, typename inner_type::iterator, chunk_size> iterator;
+  typedef nested_iterator<typename outer_type::const_iterator, typename inner_type::const_iterator, chunk_size> const_iterator;
+  typedef T value_type;
 
-  inline iterator begin() { return iterator(std::begin(m_container), std::begin(m_container), std::end(m_container)); }
-  inline iterator end()   { return iterator(std::end(m_container),   std::begin(m_container), std::end(m_container)); }
+  inline iterator begin() {
+    return iterator(std::begin(m_container), std::begin(m_container), std::end(m_container));
+  }
+  inline iterator end() {
+    return iterator(std::end(m_container), std::begin(m_container), std::end(m_container));
+  }
+  inline const_iterator begin() const {
+    return const_iterator(std::begin(m_container), std::begin(m_container), std::end(m_container));
+  }
+  inline const_iterator end() const {
+    return const_iterator(std::end(m_container), std::begin(m_container), std::end(m_container));
+  }
+  inline const_iterator cbegin() const { return begin(); }
+  inline const_iterator cend() const { return end(); }
 
   inline void push_back(const T &t) {
     auto &inner = ensure_capacity();
@@ -268,6 +288,12 @@ struct chunked_array {
       return chunk_size * (m_container.size() - 1) + m_container.back().size();
     }
   }
+  inline bool empty() { return m_container.empty(); }
+
+  T &back()              { return m_container.back().back(); }
+  const T &back() const  { return m_container.back().back(); }
+  T &front()             { return m_container.front().front(); }
+  const T &front() const { return m_container.front().front(); }
 
 private:
   outer_type m_container;
@@ -286,9 +312,13 @@ private:
 } // namespace hsplitter
 
 namespace std {
-template <typename It1, typename It2>
-struct iterator_traits<hsplitter::container::nested_iterator<It1, It2> > {
-  typedef typename hsplitter::container::nested_iterator<It1, It2>::reference reference;
+template <typename It1, typename It2, size_t S>
+struct iterator_traits<hsplitter::container::nested_iterator<It1, It2, S> > {
+  typedef random_access_iterator_tag iterator_category;
+  typedef typename hsplitter::container::nested_iterator<It1, It2, S>::pointer pointer;
+  typedef typename hsplitter::container::nested_iterator<It1, It2, S>::reference reference;
+  typedef typename hsplitter::container::nested_iterator<It1, It2, S>::value_type value_type;
+  typedef typename hsplitter::container::nested_iterator<It1, It2, S>::difference_type difference_type;
 };
 } // namespace std
 

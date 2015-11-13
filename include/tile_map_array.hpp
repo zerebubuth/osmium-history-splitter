@@ -38,10 +38,12 @@ DEALINGS IN THE SOFTWARE.
 #include <algorithm>
 #include <iterator>
 
+#include "chunked_array.hpp"
+
 namespace hsplitter {
 
 struct pair_snd_iterator {
-  typedef std::vector<std::pair<uint32_t, uint32_t> >::const_iterator const_iterator;
+  typedef container::chunked_array<std::pair<uint32_t, uint32_t> >::const_iterator const_iterator;
   explicit pair_snd_iterator(const_iterator i) : m_itr(i) {}
   pair_snd_iterator(const pair_snd_iterator &other) : m_itr(other.m_itr) {}
 
@@ -73,7 +75,7 @@ struct tile_map_subarray {
   typedef uint32_t key_type;
   typedef uint32_t mapped_type;
   typedef pair_snd_iterator const_iterator;
-  typedef std::vector<std::pair<uint32_t, uint32_t> > cont_t;
+  typedef container::chunked_array<std::pair<uint32_t, uint32_t> > cont_t;
 
   tile_map_subarray()
     : m_unsorted_count(0), m_array() {}
@@ -112,8 +114,9 @@ struct tile_map_subarray {
     //std::cerr << "sorting!" << std::endl;
     std::sort(m_array.begin(), m_array.end());
     auto itr = std::unique(m_array.begin(), m_array.end());
-    m_array.erase(itr, m_array.end());
-    m_array.shrink_to_fit();
+    //m_array.erase(itr, m_array.end());
+    //m_array.shrink_to_fit();
+    assert(itr == m_array.end()); // there were no duplicates
     m_unsorted_count = 0;
   }
 
@@ -121,8 +124,8 @@ struct tile_map_subarray {
     if (m_unsorted_count > 0) {
       sort_array();
     }
-    const auto &lb = std::lower_bound(m_array.begin(), m_array.end(), std::make_pair(k, mapped_type(0)));
-    const auto &ub = std::upper_bound(lb, m_array.end(), std::make_pair(k, std::numeric_limits<mapped_type>::max()));
+    const auto &lb = std::lower_bound(m_array.cbegin(), m_array.cend(), std::make_pair(k, mapped_type(0)));
+    const auto &ub = std::upper_bound(lb, m_array.cend(), std::make_pair(k, std::numeric_limits<mapped_type>::max()));
     return iter_pair_range<const_iterator>(std::make_pair(const_iterator(lb), const_iterator(ub)));
   }
 
