@@ -161,13 +161,11 @@ int main(int argc, char *argv[]) {
     reader.close();
   }
 
-  std::cout << "node_tiles:\n"; print_histograms(node_tiles, std::cout);
-  std::cout << "way_tiles:\n"; print_histograms(way_tiles, std::cout);
-  std::cout << "extra_node_tiles:\n"; print_histograms(extra_node_tiles, std::cout);
-  std::cout << "rel_tiles:\n"; print_histograms(rel_tiles, std::cout);
-  std::cout << "extra_rel_tiles:\n"; print_histograms(extra_rel_tiles, std::cout);
-
-  return 1;
+  // std::cout << "node_tiles:\n"; print_histograms(node_tiles, std::cout);
+  // std::cout << "way_tiles:\n"; print_histograms(way_tiles, std::cout);
+  // std::cout << "extra_node_tiles:\n"; print_histograms(extra_node_tiles, std::cout);
+  // std::cout << "rel_tiles:\n"; print_histograms(rel_tiles, std::cout);
+  // std::cout << "extra_rel_tiles:\n"; print_histograms(extra_rel_tiles, std::cout);
 
   tile_grid grid(1000, 100*1024);
   std::unordered_set<hsplitter::tile_t> all_tiles;
