@@ -62,24 +62,24 @@ struct tile_file {
   typedef hsplitter::tile_t tile_t;
 
   tile_file()
-    : m_id(0), m_buffer(), m_buffer_dir() {
+    : m_id(0), m_buffer_dir(), m_buffer() {
   }
 
   tile_file(tile_t id, size_t capacity, const std::string &buffer_dir)
     : m_id(id),
-      m_buffer(new buffer(capacity, osmium::memory::Buffer::auto_grow::yes)),
-      m_buffer_dir(buffer_dir) {
+      m_buffer_dir(buffer_dir),
+      m_buffer(new buffer(capacity, osmium::memory::Buffer::auto_grow::yes)) {
     set_callback();
   }
 
-  tile_file(tile_file &&tf) : m_id(tf.m_id), m_buffer(), m_buffer_dir(tf.m_buffer_dir) {
+  tile_file(tile_file &&tf) : m_id(tf.m_id), m_buffer_dir(tf.m_buffer_dir), m_buffer() {
     swap_buffer(tf.m_buffer);
   }
   tile_file(const tile_file &) = delete;
   const tile_file &operator=(tile_file &&tf) {
     m_id = tf.m_id;
-    swap_buffer(tf.m_buffer);
     m_buffer_dir = tf.m_buffer_dir;
+    swap_buffer(tf.m_buffer);
     return *this;
   }
   const tile_file &operator=(const tile_file &) = delete;
@@ -112,8 +112,8 @@ struct tile_file {
 
   void swap(tile_file &tf) {
     std::swap(m_id, tf.m_id);
-    swap_buffer(tf.m_buffer);
     std::swap(m_buffer_dir, tf.m_buffer_dir);
+    swap_buffer(tf.m_buffer);
   }
 
   bool empty() const {
