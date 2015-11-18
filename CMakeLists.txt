@@ -83,6 +83,8 @@ set(CMAKE_CXX_FLAGS_RELWITHDEBINFO "${USUAL_COMPILE_OPTIONS}"
 if(CMAKE_BUILD_TYPE STREQUAL "Dev")
   add_definitions(-Werror)
   add_definitions(${OSMIUM_WARNING_OPTIONS})
+  add_definitions(-Wno-error=deprecated-declarations)
+  add_definitions(-Wno-deprecated-declarations)
 endif()
 
 if(CMAKE_BUILD_TYPE)
