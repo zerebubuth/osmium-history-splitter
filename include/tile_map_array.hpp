@@ -39,37 +39,11 @@ DEALINGS IN THE SOFTWARE.
 #include <iterator>
 
 #include "chunked_array.hpp"
+#include "util.hpp"
 
 namespace hsplitter {
 
-struct pair_snd_iterator {
-  typedef container::chunked_array<std::pair<uint32_t, uint32_t> >::const_iterator const_iterator;
-  explicit pair_snd_iterator(const_iterator i) : m_itr(i) {}
-  pair_snd_iterator(const pair_snd_iterator &other) : m_itr(other.m_itr) {}
-
-  typedef const uint32_t &reference;
-
-  inline reference operator*() { return m_itr->second; }
-  inline pair_snd_iterator &operator++() { ++m_itr; return *this; }
-  inline pair_snd_iterator operator++(int) { pair_snd_iterator rv = *this; ++(*this); return rv; }
-
-  inline bool operator==(const pair_snd_iterator &other) const { return m_itr == other.m_itr; }
-  inline bool operator!=(const pair_snd_iterator &other) const { return m_itr != other.m_itr; }
-
-private:
-  const_iterator m_itr;
-};
-
-template <typename Iterator>
-struct iter_pair_range {
-  typedef std::pair<Iterator, Iterator> value_type;
-  value_type m_pair;
-
-  explicit iter_pair_range(value_type v) : m_pair(v) {}
-
-  Iterator begin() const { return m_pair.first; }
-  Iterator end()   const { return m_pair.second; }
-};
+typedef util::pair_snd_iterator<container::chunked_array<std::pair<uint32_t, uint32_t> >::const_iterator> pair_snd_iterator;
 
 struct tile_map_subarray {
   typedef uint32_t key_type;
@@ -120,13 +94,13 @@ struct tile_map_subarray {
     m_unsorted_count = 0;
   }
 
-  iter_pair_range<const_iterator> equal_range(key_type k) const {
+  util::iter_pair_range<const_iterator> equal_range(key_type k) const {
     if (m_unsorted_count > 0) {
       sort_array();
     }
     const auto &lb = std::lower_bound(m_array.cbegin(), m_array.cend(), std::make_pair(k, mapped_type(0)));
     const auto &ub = std::upper_bound(lb, m_array.cend(), std::make_pair(k, std::numeric_limits<mapped_type>::max()));
-    return iter_pair_range<const_iterator>(std::make_pair(const_iterator(lb), const_iterator(ub)));
+    return util::iter_pair_range<const_iterator>(std::make_pair(const_iterator(lb), const_iterator(ub)));
   }
 
   mutable uint64_t m_unsorted_count;
@@ -170,12 +144,12 @@ struct tile_map_array {
     std::cout << "(freeze) item size: " << item_size << std::endl;
   }
 
-  iter_pair_range<const_iterator> equal_range(key_type k) const {
+  util::iter_pair_range<const_iterator> equal_range(key_type k) const {
     assert(k >= 0);
     uint32_t idx = k >> 24;
     uint32_t prt = k & ((uint64_t(1) << 24) - 1);
     if (idx >= m_array.size()) {
-      return iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(m_empty.end()), pair_snd_iterator(m_empty.end())));
+      return util::iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(m_empty.end()), pair_snd_iterator(m_empty.end())));
 
     } else {
       const tile_map_subarray &sub = m_array[idx];
