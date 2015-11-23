@@ -275,6 +275,7 @@ struct mmapped_array {
   typedef int64_t key_type;
   typedef uint32_t mapped_type;
   typedef pair_snd_iterator const_iterator;
+  static const int shift_size = 32;
 
   mmapped_array() {}
   mmapped_array(mmapped_array &&t) : m_array(std::move(t.m_array)) {}
@@ -285,8 +286,8 @@ struct mmapped_array {
 
   void insert(key_type k, mapped_type v) {
     assert(k >= 0);
-    uint64_t idx = k >> 24;
-    uint32_t prt = k & ((uint64_t(1) << 24) - 1);
+    uint64_t idx = k >> shift_size;
+    uint32_t prt = k & ((uint64_t(1) << shift_size) - 1);
     //std::cerr << "insert(" << k << ", " << v << ") -> " << idx << ", " << prt << std::endl;
     if (idx >= m_array.size()) {
       m_array.resize(idx + 1);
@@ -303,8 +304,8 @@ struct mmapped_array {
 
   util::iter_pair_range<const_iterator> equal_range(key_type k) const {
     assert(k >= 0);
-    uint32_t idx = k >> 32;
-    uint32_t prt = k & ((uint64_t(1) << 32) - 1);
+    uint32_t idx = k >> shift_size;
+    uint32_t prt = k & ((uint64_t(1) << shift_size) - 1);
     if (idx >= m_array.size()) {
       return util::iter_pair_range<const_iterator>(std::make_pair(pair_snd_iterator(nullptr), pair_snd_iterator(nullptr)));
 
