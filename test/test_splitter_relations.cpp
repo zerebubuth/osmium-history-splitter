@@ -92,6 +92,9 @@ TEST_CASE("Split relations") {
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[2] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[3] = std::set<hsplitter::tile_t>({1});
+    node_tiles.freeze();
+    way_tiles.freeze();
+    extra_node_tiles.freeze();
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -119,6 +122,9 @@ TEST_CASE("Split relations") {
     map_t node_tiles, way_tiles, extra_node_tiles;
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
     way_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
+    node_tiles.freeze();
+    way_tiles.freeze();
+    extra_node_tiles.freeze();
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -147,6 +153,9 @@ TEST_CASE("Split relations") {
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
     way_tiles.m_map[1] = std::set<hsplitter::tile_t>({1,2});
     extra_node_tiles.m_map[1] = std::set<hsplitter::tile_t>({2});
+    node_tiles.freeze();
+    way_tiles.freeze();
+    extra_node_tiles.freeze();
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 
@@ -178,6 +187,9 @@ TEST_CASE("Split relations") {
     map_t node_tiles, way_tiles, extra_node_tiles;
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[2] = std::set<hsplitter::tile_t>({2});
+    node_tiles.freeze();
+    way_tiles.freeze();
+    extra_node_tiles.freeze();
 
     osmium::memory::Buffer rels(data, buffer_size, 0);
 

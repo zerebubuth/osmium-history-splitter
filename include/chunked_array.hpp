@@ -295,6 +295,8 @@ struct chunked_array {
   T &front()             { return m_container.front().front(); }
   const T &front() const { return m_container.front().front(); }
 
+  void clear() { m_container.clear(); }
+
 private:
   outer_type m_container;
 

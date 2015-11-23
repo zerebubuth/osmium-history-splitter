@@ -80,6 +80,7 @@ TEST_CASE("Split ways") {
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[2] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[3] = std::set<hsplitter::tile_t>({1});
+    node_tiles.freeze();
 
     osmium::memory::Buffer ways(data, buffer_size, 0);
 
@@ -118,6 +119,7 @@ TEST_CASE("Split ways") {
     node_tiles.m_map[1] = std::set<hsplitter::tile_t>({1});
     node_tiles.m_map[2] = std::set<hsplitter::tile_t>({2});
     node_tiles.m_map[3] = std::set<hsplitter::tile_t>({3});
+    node_tiles.freeze();
 
     osmium::memory::Buffer ways(data, buffer_size, 0);
 

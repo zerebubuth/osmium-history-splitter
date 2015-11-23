@@ -178,6 +178,7 @@ inline TileSet tiles_for_nodes(Iterator &it, const Iterator &end) {
     detail::insert_sorted_and_clear(tiles, last_id, buffer);
   }
 
+  tiles.freeze();
   return std::move(tiles);
 }
 
@@ -228,6 +229,7 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
   std::sort(way_nodes.begin(), way_nodes.end());
   auto itr = std::unique(way_nodes.begin(), way_nodes.end());
   assert(itr == way_nodes.end()); // way nodes should have no duplicates
+  way_tiles.freeze();
 
   last_id = 0;
   for (const auto &pair : way_nodes) {
@@ -250,6 +252,7 @@ inline std::pair<TileSet, TileSet> tiles_for_ways(Iterator &it, const Iterator &
     detail::insert_sorted_and_clear(extra_node_tiles, last_id, buffer);
   }
 
+  extra_node_tiles.freeze();
   return std::move(std::make_pair(std::move(way_tiles), std::move(extra_node_tiles)));
 }
 
@@ -316,6 +319,7 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
 
   auto itr = std::unique(rel_members.begin(), rel_members.end());
   assert(itr == rel_members.end()); // members should not be duplicated, and should be sorted already.
+  rel_tiles.freeze();
 
   last_id = 0;
   for (const auto &rel_member : rel_members) {
@@ -332,6 +336,7 @@ std::pair<TileSet, TileSet> tiles_for_relations(Iterator &it, const Iterator &en
     detail::insert_sorted_and_clear(extra_rel_tiles, last_id, buffer);
   }
 
+  extra_rel_tiles.freeze();
   return std::move(std::make_pair(std::move(rel_tiles), std::move(extra_rel_tiles)));
 }
 

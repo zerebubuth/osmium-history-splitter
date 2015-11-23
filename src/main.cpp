@@ -182,7 +182,7 @@ std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &t
       writer.close();
       mapping.unmap();
       ::close(fd);
-      bfs::remove(output_filename);
+      bfs::remove(input_filename);
     }
   } catch (...) {
     exc = std::current_exception();
@@ -244,22 +244,17 @@ int main(int argc, char *argv[]) {
     const auto end = osmium::io::InputIterator<osmium::io::Reader, osmium::OSMObject>();
     std::cerr << " >> nodes" << std::endl;
     node_tiles = hsplitter::tiles_for_nodes<tileset_t, 14>(itr, end);
-    node_tiles.freeze();
 
     std::cerr << " >> ways" << std::endl;
     auto pair_way = hsplitter::tiles_for_ways(itr, end, node_tiles);
     way_tiles = std::move(pair_way.first);
     extra_node_tiles = std::move(pair_way.second);
-    way_tiles.freeze();
-    extra_node_tiles.freeze();
 
     std::cerr << " >> relations" << std::endl;
     auto pair_rel = hsplitter::tiles_for_relations(itr, end, node_tiles,
                                                    way_tiles, extra_node_tiles);
     rel_tiles = std::move(pair_rel.first);
     extra_rel_tiles = std::move(pair_rel.second);
-    rel_tiles.freeze();
-    extra_rel_tiles.freeze();
 
     reader.close();
   }

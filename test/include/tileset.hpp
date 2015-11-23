@@ -54,18 +54,20 @@ struct tileset {
   typedef hsplitter::tile_t mapped_type;
   typedef std::set<mapped_type>::const_iterator const_iterator;
 
-  tileset() {}
-  tileset(tileset &&t) : m_map(std::move(t.m_map)) {}
+  tileset() : m_map(), m_empty(), m_frozen(false) {}
+  tileset(tileset &&t) : m_map(std::move(t.m_map)), m_empty(), m_frozen(t.m_frozen) {}
   tileset(const tileset &) = delete;
 
-  tileset &operator=(tileset &&t) { m_map = std::move(t.m_map); return *this; }
+  tileset &operator=(tileset &&t) { m_map = std::move(t.m_map); m_frozen = t.m_frozen; return *this; }
   tileset &operator=(const tileset &) = delete;
 
   inline void insert(key_type k, mapped_type v) {
+    assert(!m_frozen);
     m_map[k].insert(v);
   }
 
   inline iter_pair_range<const_iterator> equal_range(key_type k) const {
+    assert(m_frozen);
     auto itr = m_map.find(k);
     if (itr == m_map.end()) {
       return iter_pair_range<const_iterator>(std::make_pair(m_empty.end(), m_empty.end()));
@@ -74,8 +76,14 @@ struct tileset {
     }
   }
 
+  void freeze() {
+    assert(!m_frozen);
+    m_frozen = true;
+  }
+
   std::map<key_type, std::set<mapped_type> > m_map;
   const std::set<mapped_type> m_empty;
+  bool m_frozen;
 };
 
 #endif /* OSMIUM_HISTORY_SPLITTER_TEST_TILESET_HPP */
