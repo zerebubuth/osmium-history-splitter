@@ -142,6 +142,11 @@ struct tmpfile {
   tmpfile &operator=(const tmpfile &) = delete;
   tmpfile &operator=(const std::string &filename) { m_filename = filename; return *this; }
 
+  std::string filename() const {
+    assert(bool(m_filename));
+    return *m_filename;
+  }
+
 private:
   boost::optional<std::string> m_filename;
 };
@@ -153,35 +158,46 @@ struct mmapped_subarray {
   typedef uint32_t mapped_type;
   typedef pair_snd_iterator const_iterator;
   typedef std::pair<uint32_t, uint32_t> pair_t;
-  typedef container::chunked_array<pair_t > cont_t;
 
   mmapped_subarray()
-    : m_array(), m_mmap(), m_empty(false), m_tmpfile() {}
+    : m_fd(-1), m_array(), m_mmap(), m_empty(false), m_tmpfile(), m_last() {
+    m_array.reserve(262144);
+  }
   mmapped_subarray(mmapped_subarray &&t)
-    : m_array(std::move(t.m_array))
+    : m_fd(t.m_fd)
+    , m_array(std::move(t.m_array))
     , m_mmap(std::move(t.m_mmap))
-    , m_empty(false)
-    , m_tmpfile(std::move(t.m_tmpfile)) {
+    , m_empty(t.m_empty)
+    , m_tmpfile(std::move(t.m_tmpfile))
+    , m_last(std::move(t.m_last)) {
   }
   mmapped_subarray(const mmapped_subarray &) = delete;
 
   mmapped_subarray &operator=(mmapped_subarray &&t) {
+    m_fd = t.m_fd;
     m_array = std::move(t.m_array);
     m_mmap = std::move(t.m_mmap);
     m_empty = t.m_empty;
     m_tmpfile = std::move(t.m_tmpfile);
+    m_last = std::move(t.m_last);
     return *this;
   }
   mmapped_subarray &operator=(const mmapped_subarray &) = delete;
 
   void insert(key_type k, mapped_type v) {
     assert(!bool(m_mmap));
+    if (m_fd == -1) { open_tmpfile(); }
     auto p = std::make_pair(k, v);
-    if (m_array.empty() || p != m_array.back()) {
-      // sanity check - must append _in_order_
-      assert(m_array.empty() || (m_array.back() < p));
-      m_array.push_back(p);
+
+    // sanity check - must append _in_order_
+    assert(!bool(m_last) || (*m_last < p));
+    m_last = p;
+
+    if (m_array.size() == m_array.capacity()) {
+      flush_array();
     }
+
+    m_array.emplace_back(std::move(p));
   }
 
   util::iter_pair_range<const_iterator> equal_range(key_type k) const {
@@ -199,48 +215,60 @@ struct mmapped_subarray {
 
   void freeze() {
     assert(!bool(m_mmap));
-    if (!m_array.empty()) {
-      const char *tmpdir = ::getenv("TMPDIR");
-      std::ostringstream ostr;
-      if (tmpdir == nullptr) {
-        ostr << "/tmp";
-      } else {
-        ostr << tmpdir;
-      }
-      ostr << "/splitter_mmapped_subarray_XXXXXX";
-      std::string filename = ostr.str();
-      char *buf = (char *)::alloca(filename.size() + 1);
-      strncpy(buf, filename.c_str(), filename.size() + 1);
-      int fd = ::mkstemp(buf);
-      if (fd == -1) {
-        throw std::runtime_error((boost::format("Unable to make temporary file to "
-                                                "freeze mmapped subarray: %1%")
-                                  % strerror(errno)).str());
-      }
-      filename = buf;
-      for (auto &pair : m_array) {
-        ssize_t len = ::write(fd, &pair, sizeof pair);
-        if (len != sizeof pair) {
-          throw std::runtime_error("Failed to write pair.");
-        }
-      }
-      int status = close(fd);
+    if (m_fd >= 0) {
+      flush_array();
+
+      m_mmap = mmap_ptr<pair_t>(m_tmpfile.filename());
+
+      int status = close(m_fd);
       if (status == -1) {
         throw std::runtime_error("Unable to close temporary file.");
       }
-      m_array.clear();
-      m_mmap = mmap_ptr<pair_t>(filename);
-      m_tmpfile = filename;
+      m_fd = -1;
 
     } else {
       m_empty = true;
     }
   }
 
-  cont_t m_array;
+private:
+  int m_fd;
+  std::vector<pair_t> m_array;
   mmap_ptr<pair_t> m_mmap;
   bool m_empty;
   tmpfile m_tmpfile;
+  boost::optional<pair_t> m_last;
+
+  void open_tmpfile() {
+    const char *tmpdir = ::getenv("TMPDIR");
+    std::ostringstream ostr;
+    if (tmpdir == nullptr) {
+      ostr << "/tmp";
+    } else {
+      ostr << tmpdir;
+    }
+    ostr << "/splitter_mmapped_subarray_XXXXXX";
+    std::string filename = ostr.str();
+    char *buf = (char *)::alloca(filename.size() + 1);
+    strncpy(buf, filename.c_str(), filename.size() + 1);
+    int fd = ::mkstemp(buf);
+    if (fd == -1) {
+      throw std::runtime_error((boost::format("Unable to make temporary file to "
+                                              "write subarray: %1%")
+                                % strerror(errno)).str());
+    }
+    filename = buf;
+    m_tmpfile = filename;
+    m_fd = fd;
+  }
+
+  void flush_array() {
+    assert(m_fd >= 0);
+    ssize_t sz = sizeof(pair_t) * m_array.size();
+    ssize_t len = ::write(m_fd, m_array.data(), sz);
+    assert(len == sz);
+    m_array.clear();
+  }
 };
 
 struct mmapped_array {
