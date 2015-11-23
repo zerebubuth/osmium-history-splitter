@@ -8,7 +8,8 @@
 
 #include "splitter.hpp"
 #include "tile_grid.hpp"
-#include "tile_map_array.hpp"
+//#include "tile_map_array.hpp"
+#include "mmapped_array.hpp"
 
 #include <boost/format.hpp>
 #include <boost/filesystem.hpp>
@@ -31,7 +32,7 @@ namespace bpo = boost::program_options;
 
 namespace hsplitter {
 size_t g_evictions = 0, g_flushes = 0;
-const tile_map_subarray::cont_t tile_map_array::m_empty;
+//const tile_map_subarray::cont_t tile_map_array::m_empty;
 } // namespace hsplitter
 
 namespace {
@@ -193,7 +194,7 @@ std::exception_ptr convert_buffer(const std::unordered_set<hsplitter::tile_t> &t
 } // anonymous namespace
 
 int main(int argc, char *argv[]) {
-  using tileset_t = hsplitter::tile_map_array;
+  using tileset_t = hsplitter::mmapped_array;
 
   size_t num_threads = 1;
   std::string input_file_name;
